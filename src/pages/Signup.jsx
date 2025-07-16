@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { auth, db } from '../config/firebase';
@@ -16,7 +16,6 @@ const Signup = () => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [roleType, setRoleType] = useState('staff');
   const [firstUser, setFirstUser] = useState(false);
   const { setUser, saveStaffProfile, saveManagerProfile } = useAuthStore();
 
@@ -35,8 +34,6 @@ const Signup = () => {
         // If both collections are empty, this is the first user
         if (managersSnapshot.empty && staffSnapshot.empty) {
           setFirstUser(true);
-          // Set roleType to manager automatically for first user
-          setRoleType('manager');
         }
       } catch (err) {
         console.error('Error checking for first user:', err);
@@ -74,8 +71,15 @@ const Signup = () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // Send email verification
-      await sendEmailVerification(user);
+      // Configure action code settings for better deliverability
+      const actionCodeSettings = {
+        url: window.location.origin + '/login', // URL to redirect back to after verification
+        handleCodeInApp: false,
+        dynamicLinkDomain: window.location.hostname
+      };
+      
+      // Send email verification with custom settings
+      await sendEmailVerification(user, actionCodeSettings);
       
       // Generate a display name from first and last name
       const displayName = `${firstName} ${lastName}`;
@@ -92,32 +96,26 @@ const Signup = () => {
         appSource: 'inventory-app'
       };
       
-      // If this is the first user, automatically make them a manager
-      if (firstUser) {
-        // First user is automatically a manager without needing approval
+      // If this is the first user and it matches superuser email, make them a manager
+      const SUPER_ADMIN_EMAIL = 'tinashegomo96@gmail.com';
+      
+      if (firstUser || user.email === SUPER_ADMIN_EMAIL) {
+        // First user or superuser is automatically a manager
         await saveManagerProfile(user.uid, profileData);
-        setSuccessMessage('Account created as manager! Please check your email to verify your account.');
-      } else if (roleType === 'staff') {
-        // Regular staff registration
+        setSuccessMessage('Account created! Please check your email to verify your account. If you don\'t see the email, please check your spam folder.');
+      } else {
+        // All other users are registered as staff
         await saveStaffProfile(user.uid, profileData);
-        setSuccessMessage('Account created! Please check your email to verify your account.');
-      } else if (roleType === 'manager') {
-        // For manager role requests, save to staff collection with pending manager request
-        await saveStaffProfile(user.uid, {
-          ...profileData,
-          pendingManagerRequest: true,
-          requestDate: new Date().toISOString()
-        });
-        setSuccessMessage('Account created with pending manager request! An existing manager will review your request.');
+        setSuccessMessage('Account created! Please check your email to verify your account. If you don\'t see the email, please check your spam folder.');
       }
       
       // Set the user in the global state
       setUser(user);
       
-      // Navigate to login after a delay or keep on the same page with a verification message
+      // Navigate to email verification page instead of login
       setTimeout(() => {
-        navigate('/login');
-      }, 5000); // Redirect after 5 seconds
+        navigate('/verify-email');
+      }, 3000); // Reduced time before redirect
       
     } catch (err) {
       console.error('Signup error:', err);
@@ -134,7 +132,7 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center p-4 font-[Inter]">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 font-[Inter]">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -154,7 +152,7 @@ const Signup = () => {
             }}
             className="w-24 h-24 mx-auto mb-6 relative group"
           >
-            <div className="w-full h-full bg-gradient-to-tr from-red-600 to-red-500 rounded-2xl shadow-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-500">
+            <div className="w-full h-full bg-red-600 rounded-2xl shadow-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-500">
               <span className="text-5xl font-black text-white font-[Inter] tracking-tighter transform -rotate-12 group-hover:rotate-0 transition-transform duration-500" style={{ textShadow: '2px 2px 0 rgba(0,0,0,0.1)' }}>
                 M
               </span>
@@ -165,7 +163,7 @@ const Signup = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-4xl font-bold text-gray-900 tracking-tight"
+            className="text-4xl font-bold text-foreground tracking-tight"
           >
             Create Account
           </motion.h2>
@@ -173,7 +171,7 @@ const Signup = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-gray-600 mt-3 text-lg"
+            className="text-muted-foreground mt-3 text-lg"
           >
             Join Monisha Inventory Management System
           </motion.p>
@@ -182,7 +180,7 @@ const Signup = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="mt-3 text-sm bg-red-100 text-red-600 p-2 rounded-lg inline-block"
+              className="mt-3 text-sm bg-destructive/20 text-destructive p-2 rounded-lg inline-block"
             >
               You are the first user! You will be registered as a manager.
             </motion.div>
@@ -194,259 +192,138 @@ const Signup = () => {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.6 }}
-          className="bg-white p-8 rounded-2xl shadow-xl backdrop-blur-sm backdrop-filter bg-opacity-80"
+          className="p-8 w-full"
         >
           <form onSubmit={handleSignup} className="space-y-6">
             {error && (
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="bg-red-50 text-red-500 p-4 rounded-xl text-sm flex items-center font-medium"
-              >
-                <svg
-                  className="w-5 h-5 mr-2 flex-shrink-0"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+              <div className="mb-6 p-4 bg-destructive/20 text-destructive rounded-lg text-sm">
                 {error}
-              </motion.div>
+              </div>
             )}
 
             {successMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-green-50 text-green-600 p-4 rounded-xl text-sm flex items-center font-medium"
-              >
-                <svg
-                  className="w-5 h-5 mr-2 flex-shrink-0"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+              <div className="mb-6 p-4 bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg text-sm">
                 {successMessage}
-              </motion.div>
+              </div>
             )}
 
-            {/* First Name */}
+            <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
-              <div className="mt-1 relative group">
+                <label htmlFor="firstName" className="block text-sm font-medium text-muted-foreground">
+                  First Name
+                </label>
                 <input
+                  id="firstName"
+                  name="firstName"
                   type="text"
+                  autoComplete="given-name"
+                  required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 ease-in-out text-gray-800 text-base"
-                  placeholder="Enter your first name"
-                  required
+                  className="mt-1 block w-full px-3 py-2 bg-input border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-foreground placeholder:text-muted-foreground"
+                  placeholder="First Name"
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <svg
-                    className="h-5 w-5 text-gray-400 group-hover:text-red-500 transition-colors duration-200"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
-                </div>
               </div>
-            </div>
-
-            {/* Last Name */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Surname</label>
-              <div className="mt-1 relative group">
+                <label htmlFor="lastName" className="block text-sm font-medium text-muted-foreground">
+                  Last Name
+                </label>
                 <input
+                  id="lastName"
+                  name="lastName"
                   type="text"
+                  autoComplete="family-name"
+                  required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 ease-in-out text-gray-800 text-base"
-                  placeholder="Enter your surname"
-                  required
+                  className="mt-1 block w-full px-3 py-2 bg-input border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-foreground placeholder:text-muted-foreground"
+                  placeholder="Last Name"
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <svg
-                    className="h-5 w-5 text-gray-400 group-hover:text-red-500 transition-colors duration-200"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
-                </div>
               </div>
             </div>
 
-            {/* Email */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
-              <div className="mt-1 relative group">
+              <label htmlFor="email" className="block text-sm font-medium text-muted-foreground">
+                Email address
+              </label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 ease-in-out text-gray-800 text-base"
-                  placeholder="Enter your email"
-                  required
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <svg
-                    className="h-5 w-5 text-gray-400 group-hover:text-red-500 transition-colors duration-200"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
-                    />
-                  </svg>
-                </div>
-              </div>
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 bg-input border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-foreground placeholder:text-muted-foreground"
+                placeholder="you@example.com"
+              />
             </div>
 
-            {/* Password */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
-              <div className="mt-1 relative group">
+              <label htmlFor="password" className="block text-sm font-medium text-muted-foreground">
+                Password
+              </label>
                 <input
+                id="password"
+                name="password"
                   type="password"
+                autoComplete="new-password"
+                required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 ease-in-out text-gray-800 text-base"
-                  placeholder="Enter your password"
-                  required
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <svg
-                    className="h-5 w-5 text-gray-400 group-hover:text-red-500 transition-colors duration-200"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
-                  </svg>
-                </div>
-              </div>
+                className="mt-1 block w-full px-3 py-2 bg-input border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-foreground placeholder:text-muted-foreground"
+                placeholder="••••••••"
+              />
             </div>
 
-            {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm Password</label>
-              <div className="mt-1 relative group">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-muted-foreground">
+                Confirm Password
+              </label>
                 <input
+                id="confirmPassword"
+                name="confirmPassword"
                   type="password"
+                autoComplete="new-password"
+                required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300 ease-in-out text-gray-800 text-base"
-                  placeholder="Confirm your password"
-                  required
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <svg
-                    className="h-5 w-5 text-gray-400 group-hover:text-red-500 transition-colors duration-200"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
-                  </svg>
-                </div>
-              </div>
+                className="mt-1 block w-full px-3 py-2 bg-input border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-foreground placeholder:text-muted-foreground"
+                placeholder="••••••••"
+              />
             </div>
 
-            {/* Role Selection - disabled for first user */}
             {!firstUser && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Account Type</label>
-                <div className="flex space-x-4">
-                  <div 
-                    className={`flex-1 p-4 rounded-xl cursor-pointer border-2 transition-all ${
-                      roleType === 'staff'
-                        ? 'border-red-500 bg-red-50 text-red-600'
-                        : 'border-gray-200 hover:border-red-200'
-                    }`}
-                    onClick={() => setRoleType('staff')}
-                  >
-                    <div className="font-medium">Staff</div>
-                    <div className="text-sm text-gray-500 mt-1">Regular staff account</div>
-                  </div>
-                  <div 
-                    className={`flex-1 p-4 rounded-xl cursor-pointer border-2 transition-all ${
-                      roleType === 'manager'
-                        ? 'border-red-500 bg-red-50 text-red-600'
-                        : 'border-gray-200 hover:border-red-200'
-                    }`}
-                    onClick={() => setRoleType('manager')}
-                  >
-                    <div className="font-medium">Manager</div>
-                    <div className="text-sm text-gray-500 mt-1">Requires approval</div>
-                  </div>
-                </div>
+              <div className="bg-secondary/50 p-3 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  You are signing up as a staff member. Only authorized administrators can grant manager access.
+                </p>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className={`w-full bg-gradient-to-r from-red-500 to-red-600 text-white py-3.5 px-4 rounded-xl font-medium text-lg shadow-lg hover:from-red-600 hover:to-red-700 transition duration-300 ease-in-out transform hover:-translate-y-1 hover:shadow-xl ${
-                loading ? 'opacity-70 cursor-not-allowed' : ''
+              className={`w-full py-3 px-4 bg-red-600 text-white rounded-lg font-semibold transition-all duration-300 ease-in-out ${
+                loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-red-700 hover:-translate-y-0.5 transform'
               }`}
             >
               {loading ? (
-                <div className="flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Creating Account...
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+                  <span>Creating Account...</span>
                 </div>
               ) : (
                 'Create Account'
               )}
             </button>
 
-            <div className="text-center mt-6">
-              <p className="text-gray-600">
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
                 Already have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => navigate('/login')}
-                  className="font-semibold text-red-600 hover:text-red-700 hover:underline transition-colors"
-                >
-                  Log in
-                </button>
+                <Link to="/login" className="font-semibold text-red-400 hover:text-red-300 hover:underline">
+                  Sign in
+                </Link>
               </p>
             </div>
           </form>
@@ -456,4 +333,4 @@ const Signup = () => {
   );
 };
 
-export default Signup; 
+export default Signup;

@@ -23,8 +23,8 @@ const UNITS = ['Meters', 'Yards', 'Pieces', 'Kilograms', 'Grams', 'Dozen', 'Box'
 const Section = ({ title, description, children }) => (
   <div className="mb-8">
     <div className="mb-6">
-      <h2 className="text-xl font-bold text-white">{title}</h2>
-      <p className="text-gray-500 mt-1">{description}</p>
+      <h2 className="text-xl font-bold text-foreground">{title}</h2>
+      <p className="text-muted-foreground mt-1">{description}</p>
     </div>
     <div>
       {children}
@@ -33,11 +33,11 @@ const Section = ({ title, description, children }) => (
 );
 
 const Input = (props) => (
-  <input {...props} className={`block w-full h-12 px-4 rounded-lg bg-[#1F2129] text-white border border-transparent focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 ${props.className || ''}`} />
+  <input {...props} className={`block w-full h-12 px-4 rounded-lg bg-background text-foreground border border-input focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 ${props.className || ''}`} />
 );
 
 const Select = (props) => (
-  <select {...props} className={`block w-full h-12 px-4 rounded-lg bg-[#1F2129] text-white border border-transparent focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 appearance-none pr-10 ${props.className || ''}`} style={{
+  <select {...props} className={`block w-full h-12 px-4 rounded-lg bg-background text-foreground border border-input focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 appearance-none pr-10 ${props.className || ''}`} style={{
     backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5L6 8L9.5 4.5' stroke='%23888888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
     backgroundRepeat: "no-repeat",
     backgroundPosition: "right 1rem center",
@@ -46,12 +46,12 @@ const Select = (props) => (
 );
 
 const Label = ({ children, ...props }) => (
-  <label {...props} className="block text-sm font-medium text-gray-400 mb-2">{children}</label>
+  <label {...props} className="block text-sm font-medium text-muted-foreground mb-2">{children}</label>
 );
 
 const FormField = ({ label, children }) => (
   <div className="mb-6">
-    <p className="text-gray-400 text-sm mb-2">{label}</p>
+    <p className="text-muted-foreground text-sm mb-2">{label}</p>
     {children}
   </div>
 );
@@ -844,14 +844,14 @@ const AddProductNew = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-gray-300">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Add New Product</h1>
-            <p className="text-gray-400 mt-1">Fill in the details to add a new product to your inventory.</p>
+            <h1 className="text-3xl font-bold text-foreground tracking-tight">Add New Product</h1>
+            <p className="text-muted-foreground mt-1">Fill in the details to add a new product to your inventory.</p>
           </div>
-          <button onClick={() => navigate('/inventory')} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-[#1F2129] rounded-lg hover:bg-gray-800 transition-colors">
+          <button onClick={() => navigate('/inventory')} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground bg-secondary rounded-lg hover:bg-secondary/80 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             Cancel
           </button>
@@ -862,9 +862,9 @@ const AddProductNew = () => {
         <form onSubmit={handleSubmit} className="space-y-8">
           
           <Section title="Product Type" description="Select whether you're adding a finished uniform or a raw material.">
-            <div className="flex w-full p-1 bg-[#1F2129] rounded-lg">
-              <button type="button" onClick={() => setProductType(PRODUCT_TYPES.UNIFORM)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.UNIFORM ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>Uniform</button>
-              <button type="button" onClick={() => setProductType(PRODUCT_TYPES.RAW_MATERIAL)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.RAW_MATERIAL ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>Raw Material</button>
+            <div className="flex w-full p-1 bg-secondary rounded-lg">
+              <button type="button" onClick={() => setProductType(PRODUCT_TYPES.UNIFORM)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.UNIFORM ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Uniform</button>
+              <button type="button" onClick={() => setProductType(PRODUCT_TYPES.RAW_MATERIAL)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.RAW_MATERIAL ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Raw Material</button>
             </div>
           </Section>
 
@@ -882,7 +882,7 @@ const AddProductNew = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
                     <div>
-                      <p className="text-gray-400 text-sm mb-2">Category</p>
+                      <p className="text-muted-foreground text-sm mb-2">Category</p>
                       <div className="flex gap-2">
                         <Select 
                           value={uniformData.category} 
@@ -898,7 +898,7 @@ const AddProductNew = () => {
                     </div>
                     
                     <div>
-                      <p className="text-gray-400 text-sm mb-2">Type</p>
+                      <p className="text-muted-foreground text-sm mb-2">Type</p>
                       <div className="flex gap-2">
                         <Select 
                           value={uniformData.type} 
@@ -925,7 +925,7 @@ const AddProductNew = () => {
                     </div>
 
                     <div>
-                      <p className="text-gray-400 text-sm mb-2">Gender</p>
+                      <p className="text-muted-foreground text-sm mb-2">Gender</p>
                       <Select 
                         value={uniformData.gender} 
                         onChange={(e) => handleUniformChange('gender', e.target.value)} 
@@ -944,14 +944,14 @@ const AddProductNew = () => {
 
               <Section title="Product Image" description="Upload a high-quality image of the product.">
                 <div className="flex items-center justify-center w-full">
-                  <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-700 rounded-xl cursor-pointer bg-[#1F2129] hover:bg-gray-800 transition-colors">
+                  <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-input rounded-xl cursor-pointer bg-secondary hover:bg-secondary/80 transition-colors">
                     {uniformData.imageUrl ? (
                       <img src={uniformData.imageUrl} alt="Product preview" className="w-full h-full object-contain rounded-xl p-2" />
                     ) : (
                       <div className="flex flex-col items-center justify-center text-center">
-                        <svg className="w-10 h-10 mb-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        <p className="text-sm text-gray-400"><span className="font-semibold text-white">Click to upload</span> or drag and drop</p>
-                        <p className="text-xs text-gray-500 mt-1">PNG, JPG or JPEG (MAX. 800x400px)</p>
+                        <svg className="w-10 h-10 mb-3 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        <p className="text-sm text-muted-foreground"><span className="font-semibold text-foreground">Click to upload</span> or drag and drop</p>
+                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG or JPEG (MAX. 800x400px)</p>
                       </div>
                     )}
                     <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
@@ -961,8 +961,8 @@ const AddProductNew = () => {
               
               <Section title="Product Variants" description="Add variants with different types, colors, and sizes.">
                 {!uniformData.type ? (
-                  <div className="mt-4 p-4 bg-gray-800/50 rounded-lg text-center">
-                    <p className="text-gray-400">Please select a product type first to see available variants</p>
+                  <div className="mt-4 p-4 bg-secondary/50 rounded-lg text-center">
+                    <p className="text-muted-foreground">Please select a product type first to see available variants</p>
                   </div>
                 ) : (availableQuantities[uniformData.type] > 0) ? (
                   <div className="mt-4">
@@ -979,37 +979,37 @@ const AddProductNew = () => {
                           const costPrice = batchItemForVariant ? batchItemForVariant.price : null;
 
                           return (
-                            <div key={variantIndex} className="variant-card bg-[#1F2129] border border-gray-700 rounded-lg overflow-hidden shadow-lg transition-all hover:border-gray-600">
+                            <div key={variantIndex} className="variant-card bg-card border border-input rounded-lg overflow-hidden shadow-lg transition-all hover:border-input/80">
                               {/* Variant Header */}
-                              <div className="bg-gray-800/50 px-4 py-3 flex justify-between items-center">
-                                <h3 className="font-medium text-white flex items-center gap-2">
-                                  <span className="inline-block w-4 h-4 rounded-full border border-white/30" style={{ backgroundColor: variant.color }}></span>
+                              <div className="bg-secondary/50 px-4 py-3 flex justify-between items-center">
+                                <h3 className="font-medium text-foreground flex items-center gap-2">
+                                  <span className="inline-block w-4 h-4 rounded-full border border-input/30" style={{ backgroundColor: variant.color }}></span>
                                   {variantIndex === 0 ? 'Primary Variant' : `Variant ${variantIndex + 1}`}
-                                  <span className="text-sm text-gray-500">({variant.variant})</span>
+                                  <span className="text-sm text-muted-foreground">({variant.variant})</span>
                                 </h3>
                                 {variantIndex > 0 && (
                                   <button
                                     type="button"
                                     onClick={() => removeVariant(variantIndex)}
-                                    className="text-gray-400 hover:text-red-400 transition-colors"
+                                    className="text-muted-foreground hover:text-destructive transition-colors"
                                     title="Remove Variant"
                                   >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
-                  </button>
+                                  </button>
                                 )}
-                </div>
+                              </div>
                               
                               {/* Variant Content */}
                               <div className="p-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div>
-                          <Label>Variant Type</Label>
+                                  <div>
+                                    <Label>Variant Type</Label>
                                     <Select
                                       value={variant.variant}
                                       onChange={(e) => handleVariantChange(variantIndex, 'variant', e.target.value)}
-                                      className="bg-black/30 border-gray-700"
+                                      className="bg-background border-input"
                                     >
                                       {availableVariants[uniformData.type]?.length === 0 ? (
                                         <option value="Default">Default</option>
@@ -1020,16 +1020,16 @@ const AddProductNew = () => {
                                           </option>
                                         ))
                                       )}
-                          </Select>
-                        </div>
+                                    </Select>
+                                  </div>
                                   
-                        <div>
-                          <Label>Color</Label>
-                          <div className="flex items-center gap-2">
-                            <div className="relative">
+                                  <div>
+                                    <Label>Color</Label>
+                                    <div className="flex items-center gap-2">
+                                      <div className="relative">
                                         <button
                                           type="button"
-                                          className="h-12 w-12 rounded-lg border border-gray-700 shadow-inner"
+                                          className="h-12 w-12 rounded-lg border border-input shadow-inner"
                                           style={{ backgroundColor: variant.color }}
                                           onClick={() => {
                                             setSelectedVariantIndex(variantIndex);
@@ -1039,24 +1039,24 @@ const AddProductNew = () => {
                                         {showVariantColorPicker && selectedVariantIndex === variantIndex && (
                                           <div className="absolute z-10 mt-2">
                                             <div className="fixed inset-0" onClick={() => setShowVariantColorPicker(false)} />
-                                            <div className="relative bg-gray-800 p-2 rounded-lg shadow-xl border border-gray-700">
+                                            <div className="relative bg-card p-2 rounded-lg shadow-xl border border-input">
                                               <HexColorPicker
                                                 color={variant.color}
                                                 onChange={(color) => handleVariantChange(variantIndex, 'color', color)}
                                               />
                                             </div>
                                           </div>
-                                )}
-                            </div>
+                                        )}
+                                      </div>
                                       <Input
                                         type="text"
                                         value={variant.color}
                                         onChange={(e) => handleVariantChange(variantIndex, 'color', e.target.value)}
-                                        className="bg-black/30 border-gray-700"
+                                        className="flex-grow"
                                       />
-                          </div>
-                        </div>
-                      </div>
+                                    </div>
+                                  </div>
+                                </div>
                                 
                                 {/* Sizes Section */}
                                 <div className="border-t border-gray-700/50 pt-4">

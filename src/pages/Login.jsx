@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../config/firebase';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -10,7 +12,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuthStore();
+  const { setUser, fetchUserProfile } = useAuthStore();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,7 +20,18 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      if (!user.emailVerified) {
+        setError('Please verify your email before logging in.');
+        setLoading(false);
+        return;
+      }
+
+      setUser(user);
+      await fetchUserProfile(user.uid);
+      
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
     } catch (err) {
@@ -56,8 +69,8 @@ const Login = () => {
             }}
             className="w-24 h-24 mx-auto mb-6 relative group"
           >
-            <div className="w-full h-full bg-primary rounded-2xl shadow-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-500">
-              <span className="text-5xl font-black text-primary-foreground font-[Inter] tracking-tighter transform -rotate-12 group-hover:rotate-0 transition-transform duration-500" style={{ textShadow: '2px 2px 0 rgba(0,0,0,0.1)' }}>
+            <div className="w-full h-full bg-red-600 rounded-2xl shadow-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-500">
+              <span className="text-5xl font-black text-white font-[Inter] tracking-tighter transform -rotate-12 group-hover:rotate-0 transition-transform duration-500" style={{ textShadow: '2px 2px 0 rgba(0,0,0,0.1)' }}>
                 M
               </span>
               <div className="absolute inset-0 bg-black/10 rounded-2xl group-hover:bg-black/0 transition-colors duration-500" />
@@ -85,17 +98,17 @@ const Login = () => {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.6 }}
-          className="bg-card/80 p-8 rounded-2xl shadow-xl backdrop-blur-sm backdrop-filter"
+          className="p-8 w-full"
         >
           {error && (
-            <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-lg text-sm">
+            <div className="mb-6 p-4 bg-destructive/20 text-destructive rounded-lg text-sm text-center">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-foreground">
+              <label htmlFor="email" className="block text-sm font-medium text-muted-foreground">
                 Email address
               </label>
               <input
@@ -106,13 +119,13 @@ const Login = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 block w-full px-4 py-3 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground placeholder:text-muted-foreground"
-                placeholder="Enter your email"
+                className="mt-2 block w-full px-4 py-3 bg-input border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-foreground placeholder:text-muted-foreground"
+                placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-foreground">
+              <label htmlFor="password" className="block text-sm font-medium text-muted-foreground">
                 Password
               </label>
               <input
@@ -123,16 +136,16 @@ const Login = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-2 block w-full px-4 py-3 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground placeholder:text-muted-foreground"
-                placeholder="Enter your password"
+                className="mt-2 block w-full px-4 py-3 bg-input border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-foreground placeholder:text-muted-foreground"
+                placeholder="••••••••"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg font-medium transition-all duration-200 ${
-                loading ? 'opacity-80 cursor-not-allowed' : 'hover:bg-primary/90'
+              className={`w-full py-3 px-4 bg-red-600 text-white rounded-lg font-semibold transition-all duration-300 ease-in-out ${
+                loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-red-700 hover:-translate-y-0.5 transform'
               }`}
             >
               {loading ? (
@@ -145,6 +158,15 @@ const Login = () => {
               )}
             </button>
           </form>
+
+          <div className="mt-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              Don't have an account?{' '}
+              <Link to="/signup" className="font-semibold text-red-400 hover:text-red-300 hover:underline">
+                Create one
+              </Link>
+            </p>
+          </div>
         </motion.div>
       </motion.div>
     </div>

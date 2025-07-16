@@ -5,6 +5,7 @@ import { auth } from './config/firebase';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import EmailVerification from './pages/EmailVerification';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import AddProductNew from './pages/AddProductNew';
@@ -17,6 +18,7 @@ import Reports from './pages/Reports';
 import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
+import UserManagement from './pages/UserManagement';
 import PrivateRoute from './components/PrivateRoute';
 import { useAuthStore } from './stores/authStore';
 import CreateBatch from './pages/CreateBatch';
@@ -42,6 +44,7 @@ function Routes() {
     <RouterRoutes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/verify-email" element={<EmailVerification />} />
       <Route
         path="/"
         element={
@@ -78,6 +81,7 @@ function Routes() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="orders/*" element={<Orders />} />
         <Route path="reports/*" element={<Reports />} />
+        <Route path="user-management" element={<UserManagement />} />
       </Route>
     </RouterRoutes>
   );

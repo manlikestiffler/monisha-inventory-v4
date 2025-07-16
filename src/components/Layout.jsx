@@ -25,7 +25,7 @@ const Layout = ({ children }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, isManager, userProfile, userRole, deleteAccount } = useAuthStore();
+  const { user, logout, isManager, userProfile, userRole, deleteAccount, isSuperAdmin } = useAuthStore();
   const { theme, setTheme } = useTheme();
 
   const toggleTheme = () => {
@@ -40,6 +40,14 @@ const Layout = ({ children }) => {
     
     if (userProfile?.displayName) {
       return userProfile.displayName;
+    }
+    
+    if (user?.email) {
+      // Extract name from email (before the @)
+      const emailName = user.email.split('@')[0];
+      // Capitalize first letter and replace dots with spaces
+      return emailName.charAt(0).toUpperCase() + 
+             emailName.slice(1).replace(/\./g, ' ');
     }
     
     return 'User';
@@ -162,9 +170,9 @@ const Layout = ({ children }) => {
               <div className="relative">
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="flex items-center space-x-2 text-sm focus:outline-none"
+                  className="flex items-center space-x-2 text-sm focus:outline-none group"
                 >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                  <div className="h-8 w-8 rounded-full bg-red-600 flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-110 shadow-md shadow-red-900/30">
                     {userProfile?.photoURL ? (
                       <img 
                         src={userProfile.photoURL} 
@@ -172,26 +180,44 @@ const Layout = ({ children }) => {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                    <span className="text-primary font-medium">
+                    <span className="text-white font-bold">
                         {getUserInitials()}
                     </span>
                     )}
                   </div>
-                  <FiChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <FiChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${isProfileOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 <AnimatePresence>
                   {isProfileOpen && (
                     <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="absolute right-0 mt-2 w-80 rounded-2xl shadow-lg bg-card ring-1 ring-border"
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ 
+                        opacity: 1, 
+                        y: 0, 
+                        scale: 1,
+                        transition: { 
+                          duration: 0.2, 
+                          ease: [0.4, 0, 0.2, 1]
+                        }
+                      }}
+                      exit={{ 
+                        opacity: 0, 
+                        y: 10, 
+                        scale: 0.95, 
+                        transition: { duration: 0.15 } 
+                      }}
+                      className="absolute right-0 mt-3 w-72 origin-top-right rounded-xl bg-card text-foreground shadow-xl border border-border z-50 overflow-hidden"
                     >
                       {/* User Info Section */}
-                      <div className="px-4 py-5">
+                      <div className="px-4 py-4 border-b border-border">
                         <div className="flex items-center">
-                          <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <motion.div 
+                            initial={{ scale: 0.8 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                            className="h-12 w-12 rounded-full bg-red-600 flex items-center justify-center overflow-hidden flex-shrink-0 border-2 border-red-500/30"
+                          >
                             {userProfile?.photoURL ? (
                               <img 
                                 src={userProfile.photoURL} 
@@ -199,59 +225,70 @@ const Layout = ({ children }) => {
                                 className="h-full w-full object-cover"
                               />
                             ) : (
-                            <span className="text-2xl text-primary font-medium">
+                            <span className="text-lg text-white font-bold">
                                 {getUserInitials()}
                             </span>
                             )}
-                          </div>
-                          <div className="ml-4">
-                            <p className="text-base font-bold text-foreground">
+                          </motion.div>
+                          <div className="ml-3 overflow-hidden">
+                            <p className="text-sm font-semibold text-foreground truncate">
                               {getUserFullName()}
                             </p>
-                            <p className="text-sm text-muted-foreground truncate mt-1">
+                            <p className="text-xs text-muted-foreground truncate">
                               {user?.email}
                             </p>
                           </div>
                         </div>
-                        <div className={`inline-flex items-center mt-4 px-3 py-1.5 rounded-full text-xs font-semibold ${
-                          userRole === 'manager' 
-                            ? 'bg-destructive/10 text-destructive' 
-                            : 'bg-primary/10 text-primary'
-                        }`}>
-                          <FiShield className="inline-block mr-1.5" />
-                          {userRole === 'manager' ? 'Manager' : 'Staff'}
+                        <div className={`inline-flex items-center mt-3 px-2.5 py-1 rounded-md text-xs font-medium ${
+                            userRole === 'manager' 
+                              ? 'bg-red-500/10 text-red-400' 
+                              : 'bg-secondary text-muted-foreground'
+                          }`}>
+                          <FiShield className="inline-block mr-1.5 h-3 w-3" />
+                          <span>{userRole === 'manager' ? 'Manager' : 'Staff'}</span>
                         </div>
                       </div>
                       
-                      {/* Divider */}
-                      <hr className="border-border" />
+                      {/* Total Value Section */}
+                      <div className="px-4 py-3 border-b border-border bg-secondary/50">
+                        <div className="flex flex-col items-center">
+                          <p className="text-xs font-medium text-muted-foreground">Total Value</p>
+                          <p className="text-2xl font-bold text-foreground mt-1">$0</p>
+                        </div>
+                      </div>
                       
                       {/* Actions Section */}
-                      <div className="py-2">
+                      <div className="p-2">
                         <DropdownMenuItem onSelect={() => { navigate('/profile'); setIsProfileOpen(false); }}>
-                          <FiUser className="mr-3" />
-                          <span>View Profile</span>
+                          <FiUser className="h-4 w-4 mr-3 text-muted-foreground" />
+                          <span className="text-foreground">View Profile</span>
                         </DropdownMenuItem>
                         {isManager() && (
                           <DropdownMenuItem onSelect={() => { navigate('/users'); setIsProfileOpen(false); }}>
-                            <FiUsers className="mr-3" />
-                            <span>User Management</span>
+                            <FiUsers className="h-4 w-4 mr-3 text-muted-foreground" />
+                            <span className="text-foreground">User Management</span>
+                          </DropdownMenuItem>
+                        )}
+                        {isSuperAdmin() && (
+                          <DropdownMenuItem onSelect={() => { navigate('/user-management'); setIsProfileOpen(false); }}>
+                            <FiShield className="h-4 w-4 mr-3 text-red-400" />
+                            <span className="text-foreground">Admin Controls</span>
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onSelect={() => { navigate('/settings'); setIsProfileOpen(false); }}>
-                          <FiSettings className="mr-3" />
-                          <span>Settings</span>
+                          <FiSettings className="h-4 w-4 mr-3 text-muted-foreground" />
+                          <span className="text-foreground">Settings</span>
                         </DropdownMenuItem>
                       </div>
 
                       {/* Divider */}
-                      <hr className="border-border" />
+                      <div className="h-px bg-border mx-2"></div>
 
                       {/* Logout Section */}
-                      <div className="py-2">
-                        <DropdownMenuItem onSelect={handleLogout}>
-                          <FiLogOut className="mr-3" />
-                          <span>Logout</span>
+                      <div className="p-2">
+                        <DropdownMenuItem onSelect={handleLogout} isDestructive>
+                          <FiLogOut className="h-4 w-4 mr-3" />
+                          <span className="text-red-400">Logout</span>
                         </DropdownMenuItem>
                       </div>
                     </motion.div>
@@ -335,18 +372,24 @@ const Layout = ({ children }) => {
   );
 };
 
-const DropdownMenuItem = ({ onSelect, children }) => (
-  <button
+const DropdownMenuItem = ({ onSelect, children, isDestructive = false }) => (
+  <motion.button
     onClick={onSelect}
-    className="w-full flex items-center px-4 py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-150"
+    whileHover={{ x: 2 }}
+    className={`w-full flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+      isDestructive
+        ? 'text-red-400 hover:bg-red-500/10'
+        : 'text-gray-300 hover:bg-[#2A2B32]'
+    }`}
   >
     {children}
-  </button>
+  </motion.button>
 );
 
 DropdownMenuItem.propTypes = {
   onSelect: PropTypes.func.isRequired,
   children: PropTypes.node.isRequired,
+  isDestructive: PropTypes.bool,
 };
 
 Layout.propTypes = {
