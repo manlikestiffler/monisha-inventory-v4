@@ -24,11 +24,11 @@ export const useAuthStore = create((set, get) => ({
   initializeFirstUserCheck: async () => {
     try {
       // Check if any managers exist
-      const managersQuery = query(collection(db, 'managers'), limit(1));
+      const managersQuery = query(collection(db, 'inventory_managers'), limit(1));
       const managersSnapshot = await getDocs(managersQuery);
       
       // Check if any staff exist
-      const staffQuery = query(collection(db, 'staff'), limit(1));
+      const staffQuery = query(collection(db, 'inventory_staff'), limit(1));
       const staffSnapshot = await getDocs(staffQuery);
       
       // If both collections are empty, this is the first user
@@ -54,13 +54,13 @@ export const useAuthStore = create((set, get) => ({
   saveStaffProfile: async (uid, profileData) => {
     try {
       set({ loading: true });
-      await setDoc(doc(db, 'staff', uid), {
-        ...profileData,
-        role: 'staff', // Ensure the role is always staff
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      const currentProfile = get().userProfile || {};
+      const updatedProfile = { ...currentProfile, ...profileData, role: 'staff', updatedAt: new Date().toISOString() };
+      
+      await setDoc(doc(db, 'inventory_staff', uid), updatedProfile, { merge: true });
+      
       set({ 
-        userProfile: {...profileData, role: 'staff'}, 
+        userProfile: updatedProfile,
         userRole: 'staff',
         loading: false 
       });
@@ -75,13 +75,13 @@ export const useAuthStore = create((set, get) => ({
   saveManagerProfile: async (uid, profileData) => {
     try {
       set({ loading: true });
-      await setDoc(doc(db, 'managers', uid), {
-        ...profileData,
-        role: 'manager', // Ensure the role is always manager
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      const currentProfile = get().userProfile || {};
+      const updatedProfile = { ...currentProfile, ...profileData, role: 'manager', updatedAt: new Date().toISOString() };
+
+      await setDoc(doc(db, 'inventory_managers', uid), updatedProfile, { merge: true });
+      
       set({ 
-        userProfile: {...profileData, role: 'manager'}, 
+        userProfile: updatedProfile,
         userRole: 'manager',
         loading: false 
       });
@@ -100,16 +100,23 @@ export const useAuthStore = create((set, get) => ({
     }
     
     try {
-      let userDoc = await getDoc(doc(db, 'managers', uid));
+      let userDoc = await getDoc(doc(db, 'inventory_managers', uid));
       let role = 'manager';
       
       if (!userDoc.exists()) {
-        userDoc = await getDoc(doc(db, 'staff', uid));
+        userDoc = await getDoc(doc(db, 'inventory_staff', uid));
         role = 'staff';
       }
       
       if (userDoc.exists()) {
         const profile = userDoc.data();
+        
+        // Check for app-specific identifier
+        if (profile.appOrigin !== 'inventory') {
+          set({ userProfile: null, userRole: null, error: 'User is not authorized for this application.' });
+          return;
+        }
+
         set({ userProfile: profile, userRole: role });
       } else {
         set({ userProfile: null, userRole: null });
@@ -125,7 +132,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       set({ loading: true });
       const pendingRequestsQuery = query(
-        collection(db, 'staff'), 
+        collection(db, 'inventory_staff'), 
         where('pendingManagerRequest', '==', true)
       );
       const pendingSnapshot = await getDocs(pendingRequestsQuery);
@@ -147,7 +154,7 @@ export const useAuthStore = create((set, get) => ({
   getAllStaff: async () => {
     try {
       set({ loading: true });
-      const staffSnapshot = await getDocs(collection(db, 'staff'));
+      const staffSnapshot = await getDocs(collection(db, 'inventory_staff'));
       const staffData = staffSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -166,7 +173,7 @@ export const useAuthStore = create((set, get) => ({
   getAllManagers: async () => {
     try {
       set({ loading: true });
-      const managersSnapshot = await getDocs(collection(db, 'managers'));
+      const managersSnapshot = await getDocs(collection(db, 'inventory_managers'));
       const managersData = managersSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -218,13 +225,13 @@ export const useAuthStore = create((set, get) => ({
       // await deleteUser(auth, uid); // This requires admin privileges, not suitable for direct client-side code.
 
       // Delete from 'managers' or 'staff'
-      let userRef = doc(db, 'managers', uid);
+      let userRef = doc(db, 'inventory_managers', uid);
       let userDoc = await getDoc(userRef);
 
       if (userDoc.exists()) {
         await deleteDoc(userRef);
       } else {
-        userRef = doc(db, 'staff', uid);
+        userRef = doc(db, 'inventory_staff', uid);
         await deleteDoc(userRef);
       }
       

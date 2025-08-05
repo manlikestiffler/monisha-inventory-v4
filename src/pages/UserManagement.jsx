@@ -29,7 +29,7 @@ const UserManagement = () => {
     setLoading(true);
     try {
       // Fetch managers
-      const managersSnapshot = await getDocs(collection(db, 'managers'));
+      const managersSnapshot = await getDocs(collection(db, 'inventory_managers'));
       const managersData = managersSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -37,7 +37,7 @@ const UserManagement = () => {
       }));
 
       // Fetch staff
-      const staffSnapshot = await getDocs(collection(db, 'staff'));
+      const staffSnapshot = await getDocs(collection(db, 'inventory_staff'));
       const staffData = staffSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -66,7 +66,7 @@ const UserManagement = () => {
       setLoading(true);
       
       // Get user data from staff collection
-      const staffDoc = await getDoc(doc(db, 'staff', userId));
+      const staffDoc = await getDoc(doc(db, 'inventory_staff', userId));
       
       if (!staffDoc.exists()) {
         throw new Error('User not found');
@@ -75,7 +75,7 @@ const UserManagement = () => {
       const userData = staffDoc.data();
       
       // Create a new manager document with the same data
-      await setDoc(doc(db, 'managers', userId), {
+      await setDoc(doc(db, 'inventory_managers', userId), {
         ...userData,
         role: 'manager',
         promotedAt: new Date().toISOString(),
@@ -83,7 +83,7 @@ const UserManagement = () => {
       });
       
       // Delete the staff document
-      await deleteDoc(doc(db, 'staff', userId));
+      await deleteDoc(doc(db, 'inventory_staff', userId));
       
       // Refresh the user list
       await fetchUsers();
@@ -110,9 +110,9 @@ const UserManagement = () => {
       
       // Delete from the appropriate collection
       if (userToDelete.role === 'manager') {
-        await deleteDoc(doc(db, 'managers', userId));
+        await deleteDoc(doc(db, 'inventory_managers', userId));
       } else {
-        await deleteDoc(doc(db, 'staff', userId));
+        await deleteDoc(doc(db, 'inventory_staff', userId));
       }
       
       // Refresh the user list

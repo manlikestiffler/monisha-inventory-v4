@@ -269,12 +269,6 @@ const Layout = ({ children }) => {
                             <span className="text-foreground">User Management</span>
                           </DropdownMenuItem>
                         )}
-                        {isSuperAdmin() && (
-                          <DropdownMenuItem onSelect={() => { navigate('/user-management'); setIsProfileOpen(false); }}>
-                            <FiShield className="h-4 w-4 mr-3 text-red-400" />
-                            <span className="text-foreground">Admin Controls</span>
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuItem onSelect={() => { navigate('/settings'); setIsProfileOpen(false); }}>
                           <FiSettings className="h-4 w-4 mr-3 text-muted-foreground" />
                           <span className="text-foreground">Settings</span>

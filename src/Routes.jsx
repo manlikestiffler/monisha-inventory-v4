@@ -66,6 +66,7 @@ function Routes() {
           <Route path="edit/:id" element={<AddProductNew />} />
           <Route path=":id" element={<ProductDetails />} />
         </Route>
+        <Route path="products/*" element={<Navigate to="/inventory" replace />} />
         <Route path="schools" element={<Outlet />}>
           <Route index element={<NewSchools />} />
           <Route path=":id" element={<NewSchoolDetails />} />

@@ -201,8 +201,8 @@ const Inventory = () => {
       setLoading(true);
       try {
         // Fetch users from both staff and managers collections
-        const staffSnapshot = await getDocs(collection(db, 'staff'));
-        const managersSnapshot = await getDocs(collection(db, 'managers'));
+        const staffSnapshot = await getDocs(collection(db, 'inventory_staff'));
+        const managersSnapshot = await getDocs(collection(db, 'inventory_managers'));
         const usersMap = {};
         
         const processSnapshot = (snapshot) => {
@@ -217,6 +217,8 @@ const Inventory = () => {
 
         processSnapshot(staffSnapshot);
         processSnapshot(managersSnapshot);
+
+        console.log('Users map:', usersMap); // Debug log for usersMap
 
         // Fetch uniforms
         const uniformsQuery = query(

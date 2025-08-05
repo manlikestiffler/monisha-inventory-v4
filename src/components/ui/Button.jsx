@@ -15,6 +15,7 @@ const Button = ({
     primary: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500/50',
     secondary: 'bg-[#1F2129] hover:bg-gray-800 text-white focus:ring-gray-500/50',
     outline: 'border border-gray-700 text-gray-300 hover:bg-gray-800 focus:ring-gray-500/50',
+    danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500/50',
     link: 'bg-transparent text-gray-300 hover:text-white underline',
     ghost: 'bg-transparent hover:bg-gray-800 text-gray-300 hover:text-white',
   };
@@ -59,7 +60,7 @@ const Button = ({
 
 Button.propTypes = {
   children: PropTypes.node.isRequired,
-  variant: PropTypes.oneOf(['primary', 'secondary', 'outline', 'link', 'ghost']),
+  variant: PropTypes.oneOf(['primary', 'secondary', 'outline', 'link', 'ghost', 'danger']),
   size: PropTypes.oneOf(['sm', 'md', 'lg']),
   className: PropTypes.string,
   loading: PropTypes.bool,

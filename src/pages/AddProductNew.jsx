@@ -1,15 +1,36 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { db, storage } from '../config/firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, getDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { HexColorPicker } from 'react-colorful';
 import SchoolSelect from '../components/SchoolSelect';
 import { UNIFORM_CATEGORIES } from '../constants/uniforms';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
+import { useInventoryStore } from '../stores/inventoryStore';
 import React from 'react'; // Added for useMemo
+import Lottie from "lottie-react";
+import successAnimation from "../assets/Checkmark Burst.json";
+
+const findUserByEmail = async (email) => {
+  // First, check the inventory_managers collection
+  let q = query(collection(db, 'inventory_managers'), where('email', '==', email));
+  let querySnapshot = await getDocs(q);
+  if (!querySnapshot.empty) {
+    return { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+  }
+
+  // If not found, check the inventory_staff collection
+  q = query(collection(db, 'inventory_staff'), where('email', '==', email));
+  querySnapshot = await getDocs(q);
+  if (!querySnapshot.empty) {
+    return { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+  }
+
+  return null;
+};
 
 const PRODUCT_TYPES = {
   UNIFORM: 'uniform',
@@ -23,8 +44,8 @@ const UNITS = ['Meters', 'Yards', 'Pieces', 'Kilograms', 'Grams', 'Dozen', 'Box'
 const Section = ({ title, description, children }) => (
   <div className="mb-8">
     <div className="mb-6">
-      <h2 className="text-xl font-bold text-foreground">{title}</h2>
-      <p className="text-muted-foreground mt-1">{description}</p>
+      <h2 className="text-xl font-bold text-gray-900 dark:text-foreground">{title}</h2>
+      <p className="text-gray-500 dark:text-muted-foreground mt-1">{description}</p>
     </div>
     <div>
       {children}
@@ -33,11 +54,11 @@ const Section = ({ title, description, children }) => (
 );
 
 const Input = (props) => (
-  <input {...props} className={`block w-full h-12 px-4 rounded-lg bg-background text-foreground border border-input focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 ${props.className || ''}`} />
+  <input {...props} className={`block w-full h-12 px-4 rounded-lg bg-white dark:bg-background text-gray-900 dark:text-foreground border border-gray-300 dark:border-input placeholder-gray-400 focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 ${props.className || ''}`} />
 );
 
 const Select = (props) => (
-  <select {...props} className={`block w-full h-12 px-4 rounded-lg bg-background text-foreground border border-input focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 appearance-none pr-10 ${props.className || ''}`} style={{
+  <select {...props} className={`block w-full h-12 px-4 rounded-lg bg-white dark:bg-background text-gray-900 dark:text-foreground border border-gray-300 dark:border-input focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 appearance-none pr-10 ${props.className || ''}`} style={{
     backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5L6 8L9.5 4.5' stroke='%23888888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
     backgroundRepeat: "no-repeat",
     backgroundPosition: "right 1rem center",
@@ -51,7 +72,7 @@ const Label = ({ children, ...props }) => (
 
 const FormField = ({ label, children }) => (
   <div className="mb-6">
-    <p className="text-muted-foreground text-sm mb-2">{label}</p>
+    <p className="text-gray-700 dark:text-muted-foreground text-sm font-medium mb-2">{label}</p>
     {children}
   </div>
 );
@@ -59,9 +80,11 @@ const FormField = ({ label, children }) => (
 const AddProductNew = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { addProduct } = useInventoryStore();
   const [loading, setLoading] = useState(false);
   const [productType, setProductType] = useState(PRODUCT_TYPES.UNIFORM);
   const [error, setError] = useState('');
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [showVariantColorPicker, setShowVariantColorPicker] = useState(false);
   const [showRawMaterialColorPicker, setShowRawMaterialColorPicker] = useState(false);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(null);
@@ -71,6 +94,9 @@ const AddProductNew = () => {
   const [availableSizes, setAvailableSizes] = useState({});
   const [availableColors, setAvailableColors] = useState({});
   const [availableQuantities, setAvailableQuantities] = useState({});
+  const [availableQuantitiesBySize, setAvailableQuantitiesBySize] = useState({});
+  const [batchId, setBatchId] = useState('');
+  const [activeBatches, setActiveBatches] = useState([]);
 
   const [uniformData, setUniformData] = useState({
     name: '',
@@ -101,16 +127,18 @@ const AddProductNew = () => {
         console.log("DEBUG: All batches fetched:", fetchedBatches);
         
         // Filter active batches
-        const activeBatches = fetchedBatches.filter(batch => batch.status === "active");
-        setBatches(activeBatches);
+        const activeBatchesData = fetchedBatches.filter(batch => batch.status === "active");
+        setBatches(activeBatchesData);
+        setActiveBatches(activeBatchesData);
         
         // Process batches to extract available types, variants, and sizes
         const variantsByType = {};
         const sizesByVariant = {};
         const colorsByVariant = {};
         const quantitiesByType = {};
+        const quantitiesBySize = {};
         
-        activeBatches.forEach(batch => {
+        activeBatchesData.forEach(batch => {
           console.log(`DEBUG: Processing batch: ${batch.name}`, batch);
           
           if (batch.type) {
@@ -142,6 +170,8 @@ const AddProductNew = () => {
                   if (size.size && size.quantity > 0) {
                     sizesByVariant[variantKey].add(size.size);
                     quantitiesByType[batch.type] += size.quantity;
+                    const sizeKey = `${variantKey}|${size.size}`;
+                    quantitiesBySize[sizeKey] = (quantitiesBySize[sizeKey] || 0) + size.quantity;
                   }
                 });
               } else {
@@ -176,12 +206,14 @@ const AddProductNew = () => {
         console.log("DEBUG: Available sizes:", availableSizes);
         console.log("DEBUG: Available colors:", availableColors);
         console.log("DEBUG: Available quantities:", quantitiesByType);
+        console.log("DEBUG: Available quantities by size:", quantitiesBySize);
         
         setAvailableTypes(availableTypes);
         setAvailableVariants(availableVariants);
         setAvailableSizes(availableSizes);
         setAvailableColors(availableColors);
         setAvailableQuantities(quantitiesByType);
+        setAvailableQuantitiesBySize(quantitiesBySize);
         
       } catch (error) {
         console.error("Error loading batches:", error);
@@ -264,6 +296,7 @@ const AddProductNew = () => {
             price: ''
           }]
         };
+        setBatchId(activeBatches.find(b => b.type === value)?.id || '');
       } else {
         console.log("DEBUG: No variants available, using default");
         initialVariant = {
@@ -339,8 +372,25 @@ const AddProductNew = () => {
 
   // Optimize size change handler for better performance
   const handleSizeChange = (variantIndex, sizeIndex, field, value) => {
-    // For numeric fields, ensure valid numbers
-    if (field === 'quantity' || field === 'price') {
+    if (field === 'quantity') {
+      const requestedQuantity = parseInt(value, 10);
+      
+      if (value !== '' && (isNaN(requestedQuantity) || requestedQuantity < 0)) {
+        return; // Ignore invalid numeric input
+      }
+
+      const variant = uniformData.variants[variantIndex];
+      const size = variant.sizes[sizeIndex].size;
+      const variantKey = `${uniformData.type}|${variant.variant}`;
+      const sizeKey = `${variantKey}|${size}`;
+      const availableQuantity = availableQuantitiesBySize[sizeKey] || 0;
+
+      if (requestedQuantity > availableQuantity) {
+        toast.error(`Quantity for size ${size} cannot exceed available stock of ${availableQuantity}.`);
+        return;
+      }
+    }
+    if (field === 'price') {
       if (value !== '' && isNaN(parseFloat(value))) {
         return; // Ignore invalid numeric input
       }
@@ -462,25 +512,35 @@ const AddProductNew = () => {
     }
   };
   
-  // Optimize add size function
-  const addSize = (i) => {
+  // Optimize add size function to be fully immutable
+  const handleAddSize = (variantIndex) => {
     setUniformData(prev => {
-      const newVariants = [...prev.variants];
-      newVariants[i].sizes.push({ size: '', quantity: '', price: '' });
+      const newVariants = prev.variants.map((variant, vIndex) => {
+        if (vIndex === variantIndex) {
+          return {
+            ...variant,
+            sizes: [...variant.sizes, { size: '', quantity: '', price: '' }]
+          };
+        }
+        return variant;
+      });
       return { ...prev, variants: newVariants };
     });
-    
     toast.success("Size added successfully");
   };
   
-  // Optimize remove size function
-  const removeSize = (variantIndex, sizeIndex) => {
+  // Optimize remove size function to be fully immutable
+  const handleRemoveSize = (variantIndex, sizeIndex) => {
     setUniformData(prev => {
-      const newVariants = [...prev.variants];
-      newVariants[variantIndex].sizes = newVariants[variantIndex].sizes.filter((_, i) => i !== sizeIndex);
+      const newVariants = prev.variants.map((variant, vIndex) => {
+        if (vIndex === variantIndex) {
+          const newSizes = variant.sizes.filter((_, sIndex) => sIndex !== sizeIndex);
+          return { ...variant, sizes: newSizes };
+        }
+        return variant;
+      });
       return { ...prev, variants: newVariants };
     });
-    
     toast.success("Size removed successfully");
   };
 
@@ -600,205 +660,87 @@ const AddProductNew = () => {
     }
     
     setLoading(true);
+    let productTypeStr;
     
     try {
       let productData = {};
       let imageUrls = [];
-      
-      // Upload images if any
-        if (uniformData.image) {
-          const storageRef = ref(storage, `products/${Date.now()}_${uniformData.image.name}`);
-        await uploadBytes(storageRef, uniformData.image);
-        const url = await getDownloadURL(storageRef);
-        imageUrls.push(url);
+
+      // Find the user's document ID from their email
+      const userProfile = await findUserByEmail(user?.email);
+      if (!userProfile) {
+        toast.error("Could not find a user profile. Please contact support.");
+        setLoading(false);
+        return;
       }
-      
-      // Common fields for all product types
-      const commonFields = {
-        name: uniformData.name,
-        school: uniformData.school,
-        category: uniformData.category,
-        type: uniformData.type,
-        gender: uniformData.gender,
-        images: imageUrls,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        createdBy: user?.email || 'unknown',
-        createdByUid: user?.uid || 'unknown',
-        createdByRole: user?.role || 'unknown',
-        status: 'active'
-      };
-      
+
       if (productType === PRODUCT_TYPES.UNIFORM) {
+        productTypeStr = 'Uniform';
         // Validate required fields
         if (!uniformData.school || !uniformData.type || uniformData.variants.length === 0) {
           toast.error("Please fill all required fields");
           setLoading(false);
           return;
         }
-        
-        // Validate that each variant has at least one size
-        for (const variant of uniformData.variants) {
-          if (!variant.variant || variant.sizes.length === 0) {
-            toast.error("Each variant must have at least one size");
-            setLoading(false);
-            return;
-          }
-          
-          // Validate that each size has quantity and price
-          for (const size of variant.sizes) {
-            if (!size.size || !size.quantity || !size.price) {
-              toast.error("Each size must have a size, quantity, and price");
-              setLoading(false);
-              return;
-            }
-          }
-        }
-        
-        // Prepare uniform data for Firestore
         productData = {
-          ...commonFields,
-          schoolId: uniformData.school,
-          type: uniformData.type,
-          variants: uniformData.variants.map(variant => ({
-            variant: variant.variant,
-            color: variant.color,
-            sizes: variant.sizes.map(size => ({
-              size: size.size,
-              quantity: parseInt(size.quantity),
-              price: parseFloat(size.price)
-            }))
-          })),
-          productType: "uniform"
+          ...uniformData,
+          createdBy: user?.email || 'unknown',
+          createdByUid: userProfile.id, // Use the Firestore document ID
+          batchId: batchId,
         };
-        
         // Add to uniforms collection
-        await addDoc(collection(db, "uniforms"), productData);
+        await addProduct(productData, 'uniform');
         
-        // Update batch inventory - find all relevant batches with matching items
-        for (const formVariant of uniformData.variants) {
-          let remainingQuantity = {};
-          
-          // Initialize remaining quantity for each size
-          formVariant.sizes.forEach(size => {
-            remainingQuantity[size.size] = parseInt(size.quantity);
-          });
-          
-          // Find batches with matching variant and color
-          const matchingBatches = batches.filter(batch => 
-            batch.type === uniformData.type && 
-            batch.items?.some(item => 
-              item.variantType === formVariant.variant && 
-              item.color === formVariant.color
-            )
-          );
-          
-          // Sort batches by creation date (FIFO)
-          matchingBatches.sort((a, b) => {
-            const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt?.seconds * 1000 || 0);
-            const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt?.seconds * 1000 || 0);
-            return dateA - dateB;
-          });
-          
-          // Reduce quantities from batches
-          for (const batch of matchingBatches) {
-            // Skip if all quantities are fulfilled
-            if (Object.values(remainingQuantity).every(qty => qty <= 0)) break;
-            
-            const batchCopy = { ...batch };
-            const updatedItems = [...batchCopy.items];
-            let batchUpdated = false;
-            
-            // Find the matching item in this batch
-            const itemIndex = updatedItems.findIndex(item => 
-              item.variantType === formVariant.variant && 
-              item.color === formVariant.color
-            );
-            
-            if (itemIndex === -1) continue;
-            
-            // Update sizes in this batch
-            for (const [sizeKey, neededQty] of Object.entries(remainingQuantity)) {
-              if (neededQty <= 0) continue;
-              
-              const sizeIndex = updatedItems[itemIndex].sizes.findIndex(s => s.size === sizeKey);
-              if (sizeIndex === -1) continue;
-              
-              const availableQty = updatedItems[itemIndex].sizes[sizeIndex].quantity;
-              const qtyToReduce = Math.min(availableQty, neededQty);
-              
-              if (qtyToReduce > 0) {
-                updatedItems[itemIndex].sizes[sizeIndex].quantity -= qtyToReduce;
-                
-                // Add depletion date if quantity reaches zero
-                if (updatedItems[itemIndex].sizes[sizeIndex].quantity === 0) {
-                  updatedItems[itemIndex].sizes[sizeIndex].depletedAt = serverTimestamp();
+        // Update batch inventory
+        for (const variant of uniformData.variants) {
+          for (const size of variant.sizes) {
+            const batchRef = doc(db, 'batchInventory', productData.batchId);
+            const batchDoc = await getDoc(batchRef);
+            if (batchDoc.exists()) {
+              const batchData = batchDoc.data();
+              const updatedItems = batchData.items.map(item => {
+                if (item.variantType === variant.variant && item.color === variant.color) {
+                  const updatedSizes = item.sizes.map(s => {
+                    if (s.size === size.size) {
+                      return { ...s, quantity: s.quantity - size.quantity };
+                    }
+                    return s;
+                  });
+                  return { ...item, sizes: updatedSizes };
                 }
-                
-                remainingQuantity[sizeKey] -= qtyToReduce;
-                batchUpdated = true;
-              }
-            }
-            
-            // Update batch in Firestore if changes were made
-            if (batchUpdated) {
-              // Calculate new totals
-              const updatedTotalQuantity = updatedItems.reduce((total, item) => {
-                return total + item.sizes.reduce((sizeTotal, size) => sizeTotal + size.quantity, 0);
-              }, 0);
-              
-              const updatedTotalValue = updatedItems.reduce((total, item) => {
-                return total + item.sizes.reduce((sizeTotal, size) => sizeTotal + (size.quantity * item.price), 0);
-              }, 0);
-              
-              await updateDoc(doc(db, "batchInventory", batch.id), {
-                items: updatedItems,
-                totalQuantity: updatedTotalQuantity,
-                totalValue: updatedTotalValue,
-                updatedAt: serverTimestamp()
+                return item;
               });
+              await updateDoc(batchRef, { items: updatedItems });
             }
-          }
-          
-          // Check if all quantities were fulfilled
-          const unfulfilled = Object.entries(remainingQuantity).filter(([_, qty]) => qty > 0);
-          if (unfulfilled.length > 0) {
-            const sizeList = unfulfilled.map(([size, qty]) => `${size} (${qty})`).join(', ');
-            toast.error(`Not enough stock for ${formVariant.variant} in sizes: ${sizeList}`);
-            setLoading(false);
-            return;
           }
         }
         
       } else {
+        productTypeStr = 'Raw Material';
         // Validate required fields
         if (!rawMaterialData.name || !rawMaterialData.quantity || !rawMaterialData.unit || !rawMaterialData.price) {
           toast.error("Please fill all required fields");
           setLoading(false);
           return;
         }
-        
-        // Prepare raw material data for Firestore
         productData = {
-          ...commonFields,
-          name: rawMaterialData.name,
-          quantity: parseInt(rawMaterialData.quantity),
-          unit: rawMaterialData.unit,
-          price: parseFloat(rawMaterialData.price),
+          ...rawMaterialData,
+          createdBy: user?.email || 'unknown',
+          createdByUid: userProfile.id, // Use the Firestore document ID
           productType: "raw_material"
         };
         
         // Add to raw_materials collection
-        await addDoc(collection(db, "raw_materials"), productData);
+        await addProduct(productData, 'raw_material');
       }
       
       // Success message and reset form
-      toast.success(`${productType === PRODUCT_TYPES.UNIFORM ? "Uniform" : "Raw Material"} added successfully`);
+      setShowSuccessAnimation(true);
       resetForm();
       
     } catch (error) {
       console.error("Error adding product:", error);
-      toast.error("Failed to add product. Please try again.");
+      toast.error(`Failed to add ${productTypeStr || 'product'}. Please try again.`);
     } finally {
       setLoading(false);
     }
@@ -845,13 +787,16 @@ const AddProductNew = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <AnimatePresence>
+        {showSuccessAnimation && <SuccessModal onAnimationComplete={() => setShowSuccessAnimation(false)} />}
+      </AnimatePresence>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">Add New Product</h1>
-            <p className="text-muted-foreground mt-1">Fill in the details to add a new product to your inventory.</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-foreground tracking-tight">Add New Product</h1>
+            <p className="text-gray-600 dark:text-muted-foreground mt-1">Fill in the details to add a new product to your inventory.</p>
           </div>
-          <button onClick={() => navigate('/inventory')} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground bg-secondary rounded-lg hover:bg-secondary/80 transition-colors">
+          <button onClick={() => navigate('/inventory')} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-muted-foreground bg-gray-100 dark:bg-secondary rounded-lg border border-gray-300 dark:border-transparent hover:bg-gray-200 dark:hover:bg-secondary/80 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             Cancel
           </button>
@@ -862,9 +807,9 @@ const AddProductNew = () => {
         <form onSubmit={handleSubmit} className="space-y-8">
           
           <Section title="Product Type" description="Select whether you're adding a finished uniform or a raw material.">
-            <div className="flex w-full p-1 bg-secondary rounded-lg">
-              <button type="button" onClick={() => setProductType(PRODUCT_TYPES.UNIFORM)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.UNIFORM ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Uniform</button>
-              <button type="button" onClick={() => setProductType(PRODUCT_TYPES.RAW_MATERIAL)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.RAW_MATERIAL ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Raw Material</button>
+            <div className="flex w-full p-1 bg-gray-100 dark:bg-secondary rounded-lg">
+              <button type="button" onClick={() => setProductType(PRODUCT_TYPES.UNIFORM)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.UNIFORM ? 'bg-primary text-primary-foreground' : 'text-gray-700 dark:text-muted-foreground hover:text-gray-900 dark:hover:text-foreground'}`}>Uniform</button>
+              <button type="button" onClick={() => setProductType(PRODUCT_TYPES.RAW_MATERIAL)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.RAW_MATERIAL ? 'bg-primary text-primary-foreground' : 'text-gray-700 dark:text-muted-foreground hover:text-gray-900 dark:hover:text-foreground'}`}>Raw Material</button>
             </div>
           </Section>
 
@@ -882,7 +827,7 @@ const AddProductNew = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
                     <div>
-                      <p className="text-muted-foreground text-sm mb-2">Category</p>
+                      <p className="text-gray-700 dark:text-muted-foreground text-sm font-medium mb-2">Category</p>
                       <div className="flex gap-2">
                         <Select 
                           value={uniformData.category} 
@@ -898,7 +843,7 @@ const AddProductNew = () => {
                     </div>
                     
                     <div>
-                      <p className="text-muted-foreground text-sm mb-2">Type</p>
+                      <p className="text-gray-700 dark:text-muted-foreground text-sm font-medium mb-2">Type</p>
                       <div className="flex gap-2">
                         <Select 
                           value={uniformData.type} 
@@ -925,7 +870,7 @@ const AddProductNew = () => {
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground text-sm mb-2">Gender</p>
+                      <p className="text-gray-700 dark:text-muted-foreground text-sm font-medium mb-2">Gender</p>
                       <Select 
                         value={uniformData.gender} 
                         onChange={(e) => handleUniformChange('gender', e.target.value)} 
@@ -944,14 +889,14 @@ const AddProductNew = () => {
 
               <Section title="Product Image" description="Upload a high-quality image of the product.">
                 <div className="flex items-center justify-center w-full">
-                  <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-input rounded-xl cursor-pointer bg-secondary hover:bg-secondary/80 transition-colors">
+                  <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-300 dark:border-input rounded-xl cursor-pointer bg-gray-50 dark:bg-secondary hover:bg-gray-100 dark:hover:bg-secondary/80 transition-colors">
                     {uniformData.imageUrl ? (
                       <img src={uniformData.imageUrl} alt="Product preview" className="w-full h-full object-contain rounded-xl p-2" />
                     ) : (
                       <div className="flex flex-col items-center justify-center text-center">
-                        <svg className="w-10 h-10 mb-3 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        <p className="text-sm text-muted-foreground"><span className="font-semibold text-foreground">Click to upload</span> or drag and drop</p>
-                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG or JPEG (MAX. 800x400px)</p>
+                        <svg className="w-10 h-10 mb-3 text-gray-400 dark:text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        <p className="text-sm text-gray-500 dark:text-muted-foreground"><span className="font-semibold text-gray-700 dark:text-foreground">Click to upload</span> or drag and drop</p>
+                        <p className="text-xs text-gray-400 dark:text-muted-foreground mt-1">PNG, JPG or JPEG (MAX. 800x400px)</p>
                       </div>
                     )}
                     <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
@@ -961,8 +906,8 @@ const AddProductNew = () => {
               
               <Section title="Product Variants" description="Add variants with different types, colors, and sizes.">
                 {!uniformData.type ? (
-                  <div className="mt-4 p-4 bg-secondary/50 rounded-lg text-center">
-                    <p className="text-muted-foreground">Please select a product type first to see available variants</p>
+                  <div className="mt-4 p-4 bg-slate-50 dark:bg-secondary/50 rounded-lg text-center border border-slate-200 dark:border-transparent">
+                    <p className="text-slate-500 dark:text-muted-foreground">Please select a product type first to see available variants</p>
                   </div>
                 ) : (availableQuantities[uniformData.type] > 0) ? (
                   <div className="mt-4">
@@ -979,13 +924,13 @@ const AddProductNew = () => {
                           const costPrice = batchItemForVariant ? batchItemForVariant.price : null;
 
                           return (
-                            <div key={variantIndex} className="variant-card bg-card border border-input rounded-lg overflow-hidden shadow-lg transition-all hover:border-input/80">
+                            <div key={variantIndex} className="variant-card bg-white dark:bg-card border border-gray-200 dark:border-input rounded-lg overflow-hidden shadow-sm transition-all hover:border-gray-300 dark:hover:border-input/80">
                               {/* Variant Header */}
-                              <div className="bg-secondary/50 px-4 py-3 flex justify-between items-center">
-                                <h3 className="font-medium text-foreground flex items-center gap-2">
-                                  <span className="inline-block w-4 h-4 rounded-full border border-input/30" style={{ backgroundColor: variant.color }}></span>
+                              <div className="bg-gray-50 dark:bg-secondary/50 px-4 py-3 flex justify-between items-center">
+                                <h3 className="font-medium text-gray-800 dark:text-foreground flex items-center gap-2">
+                                  <span className="inline-block w-4 h-4 rounded-full border border-gray-300 dark:border-input/30" style={{ backgroundColor: variant.color }}></span>
                                   {variantIndex === 0 ? 'Primary Variant' : `Variant ${variantIndex + 1}`}
-                                  <span className="text-sm text-muted-foreground">({variant.variant})</span>
+                                  <span className="text-sm text-gray-500 dark:text-muted-foreground">({variant.variant})</span>
                                 </h3>
                                 {variantIndex > 0 && (
                                   <button
@@ -1009,7 +954,7 @@ const AddProductNew = () => {
                                     <Select
                                       value={variant.variant}
                                       onChange={(e) => handleVariantChange(variantIndex, 'variant', e.target.value)}
-                                      className="bg-background border-input"
+                                      className="bg-white dark:bg-background border-gray-300 dark:border-input"
                                     >
                                       {availableVariants[uniformData.type]?.length === 0 ? (
                                         <option value="Default">Default</option>
@@ -1029,7 +974,7 @@ const AddProductNew = () => {
                                       <div className="relative">
                                         <button
                                           type="button"
-                                          className="h-12 w-12 rounded-lg border border-input shadow-inner"
+                                          className="h-12 w-12 rounded-lg border border-gray-300 dark:border-input shadow-inner"
                                           style={{ backgroundColor: variant.color }}
                                           onClick={() => {
                                             setSelectedVariantIndex(variantIndex);
@@ -1059,17 +1004,17 @@ const AddProductNew = () => {
                                 </div>
                                 
                                 {/* Sizes Section */}
-                                <div className="border-t border-gray-700/50 pt-4">
+                                <div className="border-t border-gray-200 dark:border-gray-700/50 pt-4">
                                   <div className="flex justify-between items-center mb-3">
                                     <Label className="mb-0 flex items-center gap-1">
-                                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
                                       </svg>
                                       Sizes
                                     </Label>
                                     <button
                                       type="button"
-                                      onClick={() => addSize(variantIndex)}
+                                      onClick={() => handleAddSize(variantIndex)}
                                       className="text-sm bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 px-3 py-1 rounded-md transition-colors flex items-center gap-1"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1109,13 +1054,13 @@ const AddProductNew = () => {
                                       return (
                                         <div key={sizeIndex} 
                                             className={`grid grid-cols-1 md:grid-cols-11 gap-2 items-start rounded-lg px-3 py-3 transition-all ${
-                                              sizeIndex % 2 === 0 ? 'bg-black/30' : 'bg-black/10'
-                                            } hover:bg-black/40 border-l-2 ${!size.size || !size.quantity || !size.price ? 'border-red-500/70' : 'border-transparent'}`}>
+                                              sizeIndex % 2 === 0 ? 'bg-gray-50 dark:bg-black/30' : 'bg-white dark:bg-black/10'
+                                            } hover:bg-gray-100 dark:hover:bg-black/40 border-l-2 ${!size.size || !size.quantity || !size.price ? 'border-red-500/70' : 'border-transparent'}`}>
                                           <div className="md:col-span-4">
                                             <Select
                                               value={size.size}
                                               onChange={(e) => handleSizeChange(variantIndex, sizeIndex, 'size', e.target.value)}
-                                              className="border-gray-700/50 bg-black/30"
+                                              className="border-gray-300 dark:border-gray-700/50 bg-white dark:bg-black/30"
                                             >
                                               <option value="" disabled>Select Size</option>
                                               {availableSizes[`${uniformData.type}|${variant.variant}`]?.length === 0 ? (
@@ -1138,7 +1083,7 @@ const AddProductNew = () => {
                                                 value={size.quantity}
                                                 onChange={(e) => handleSizeChange(variantIndex, sizeIndex, 'quantity', e.target.value)}
                                                 min="1"
-                                                className={`border-gray-700/50 bg-black/30 ${!size.quantity ? "border-red-500/50" : ""}`}
+                                                className={`border-gray-300 dark:border-gray-700/50 bg-white dark:bg-black/30 ${!size.quantity ? "border-red-500/50" : ""}`}
                                               />
                                               <div className="absolute inset-y-0 right-0 flex items-center pr-2">
                                                 <div className="flex flex-col">
@@ -1182,7 +1127,7 @@ const AddProductNew = () => {
                                                 onChange={(e) => handleSizeChange(variantIndex, sizeIndex, 'price', e.target.value)}
                                                 min="0"
                                                 step="0.01"
-                                                className={`pl-8 border-gray-700/50 bg-black/30 ${!size.price ? "border-red-500/50" : ""}`}
+                                                className={`pl-8 border-gray-300 dark:border-gray-700/50 bg-white dark:bg-black/30 ${!size.price ? "border-red-500/50" : ""}`}
                                               />
                                               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                                 <span className="text-gray-500 font-medium">$</span>
@@ -1230,7 +1175,7 @@ const AddProductNew = () => {
                                             {sizeIndex > 0 && (
                                               <button
                                                 type="button"
-                                                onClick={() => removeSize(variantIndex, sizeIndex)}
+                                                onClick={() => handleRemoveSize(variantIndex, sizeIndex)}
                                                 className="text-gray-400 hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-500/10"
                                                 title="Remove Size"
                                               >
@@ -1247,8 +1192,8 @@ const AddProductNew = () => {
                                   
                                   {/* Show error if no sizes */}
                                   {variant.sizes.length === 0 && (
-                                    <div className="text-center p-4 bg-gray-800/30 rounded-lg">
-                                      <p className="text-gray-400">No sizes added yet. Click the "Add Size" button to add sizes.</p>
+                                    <div className="text-center p-4 bg-gray-100 dark:bg-gray-800/30 rounded-lg">
+                                      <p className="text-gray-500 dark:text-gray-400">No sizes added yet. Click the "Add Size" button to add sizes.</p>
                                     </div>
                                   )}
                                 </div>
@@ -1275,10 +1220,10 @@ const AddProductNew = () => {
                     ) : (
                       <div className="mb-6 p-8 bg-gray-800/30 rounded-lg text-center">
                         <div className="flex flex-col items-center gap-4">
-                          <svg className="w-16 h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-16 h-16 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                           </svg>
-                          <p className="text-gray-400 max-w-md mx-auto">No variants added yet. Each product needs at least one variant with size and pricing information.</p>
+                          <p className="text-gray-400 dark:text-gray-400 max-w-md mx-auto">No variants added yet. Each product needs at least one variant with size and pricing information.</p>
                           <button
                             type="button"
                             onClick={addVariant}
@@ -1295,8 +1240,8 @@ const AddProductNew = () => {
                     )}
                   </div>
                 ) : (
-                  <div className="mt-4 p-4 bg-gray-800/50 rounded-lg text-center">
-                    <p className="text-red-400">No stock available for this product type. All items have been depleted from the batch inventory.</p>
+                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800/50 rounded-lg text-center">
+                    <p className="text-red-500 dark:text-red-400">No stock available for this product type. All items have been depleted from the batch inventory.</p>
                   </div>
                 )}
               </Section>
@@ -1326,7 +1271,7 @@ const AddProductNew = () => {
                 <FormField label="Color">
                   <div className="flex items-center gap-2">
                     <div className="relative">
-                      <button type="button" className="h-12 w-12 rounded-lg border border-gray-700" style={{ backgroundColor: rawMaterialData.color }} onClick={() => setShowRawMaterialColorPicker(prev => !prev)} />
+                      <button type="button" className="h-12 w-12 rounded-lg border border-gray-300 dark:border-gray-700" style={{ backgroundColor: rawMaterialData.color }} onClick={() => setShowRawMaterialColorPicker(prev => !prev)} />
                       {showRawMaterialColorPicker && <div className="absolute z-10 mt-2"><div className="fixed inset-0" onClick={() => setShowRawMaterialColorPicker(false)} /><HexColorPicker color={rawMaterialData.color} onChange={(color) => handleRawMaterialChange('color', color)} /></div>}
                     </div>
                     <Input type="text" value={rawMaterialData.color} onChange={(e) => handleRawMaterialChange('color', e.target.value)} />
@@ -1356,6 +1301,36 @@ const AddProductNew = () => {
           </div>
         </form>
       </div>
+    </div>
+  );
+};
+
+const SuccessModal = ({ onAnimationComplete }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onAnimationComplete();
+    }, 2000); // Close after 2 seconds as a fallback
+
+    return () => clearTimeout(timer);
+  }, [onAnimationComplete]);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <motion.div
+        initial={{ scale: 0.5, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.5, opacity: 0 }}
+        className="bg-gray-800 p-8 rounded-lg shadow-xl text-center"
+      >
+        <Lottie
+          animationData={successAnimation}
+          loop={false}
+          onComplete={onAnimationComplete}
+          style={{ width: 150, height: 150, margin: '0 auto' }}
+        />
+        <h2 className="text-2xl font-bold text-white mt-4">Product Added!</h2>
+        <p className="text-gray-300">The new product has been successfully added to your inventory.</p>
+      </motion.div>
     </div>
   );
 };

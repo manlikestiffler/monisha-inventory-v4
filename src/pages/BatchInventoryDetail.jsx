@@ -9,24 +9,18 @@ import { useBatchStore } from '../stores/batchStore';
 function BatchInventoryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getBatch } = useBatchStore();
+  const { subscribeToBatch } = useBatchStore();
   const [batch, setBatch] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadBatch = async () => {
-      try {
-        const batchData = await getBatch(id);
-        setBatch(batchData);
-      } catch (error) {
-        console.error('Error loading batch:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    const unsubscribe = subscribeToBatch(id, (batchData) => {
+      setBatch(batchData);
+      setLoading(false);
+    });
 
-    loadBatch();
-  }, [id, getBatch]);
+    return () => unsubscribe();
+  }, [id, subscribeToBatch]);
 
   if (loading) {
     return (

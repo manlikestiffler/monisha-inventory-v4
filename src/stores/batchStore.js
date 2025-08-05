@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, addDoc, getDocs, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import mockApi from '../services/mockApi.js';
 
@@ -68,6 +68,27 @@ export const useBatchStore = create((set, get) => ({
       console.error('Error getting batch:', error);
       throw error;
     }
+  },
+
+  subscribeToBatch: (id, callback) => {
+    const batchRef = doc(db, 'batchInventory', id);
+    const unsubscribe = onSnapshot(batchRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        callback({ 
+          id: doc.id, 
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+        });
+      } else {
+        callback(null);
+      }
+    }, (error) => {
+      console.error("Error subscribing to batch:", error);
+      callback(null);
+    });
+    return unsubscribe;
   },
 
   addBatch: async (batch) => {

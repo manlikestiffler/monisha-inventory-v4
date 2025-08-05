@@ -123,7 +123,7 @@ const NewSchools = () => {
   }
 
   return (
-    <div className="p-6 space-y-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-black dark:to-black min-h-screen">
+    <div className="p-6 space-y-8 bg-white dark:bg-black min-h-screen">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-black p-6">
         <div>

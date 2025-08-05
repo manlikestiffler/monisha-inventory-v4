@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "migrate:superuser": "node scripts/migrate_users.js",
+    "migrate:products": "node scripts/update_products_creator.js"
   },
   "dependencies": {
     "@firebase/analytics": "^0.10.10",
@@ -26,6 +28,7 @@
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "firebase": "^11.1.0",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.523.0",
     "motion": "^12.19.1",
     "pdf-lib": "^1.17.1",

@@ -31,7 +31,6 @@ const ProfilePage = () => {
   const { user, userProfile, userRole, saveStaffProfile, saveManagerProfile } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    displayName: userProfile?.displayName || '',
     photoURL: userProfile?.photoURL || '',
     phoneNumber: userProfile?.phoneNumber || '',
     nationalId: userProfile?.nationalId || '',
@@ -67,14 +66,6 @@ const ProfilePage = () => {
       return name
         .split(' ')
         .map(n => n[0])
-        .join('')
-        .toUpperCase()
-        .substring(0, 2);
-    }
-    if (userProfile?.displayName) {
-      return userProfile.displayName
-        .split(' ')
-        .map(name => name[0])
         .join('')
         .toUpperCase()
         .substring(0, 2);
@@ -297,20 +288,6 @@ const ProfilePage = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Display Name
-                    </label>
-                    <input
-                      type="text"
-                      name="displayName"
-                      value={formData.displayName}
-                      onChange={handleInputChange}
-                      placeholder="e.g. John Doe"
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-200 focus:ring-red-500 focus:border-red-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Phone Number
                     </label>
                     <input
@@ -349,7 +326,7 @@ const ProfilePage = () => {
                     <FiUser className="w-5 h-5 text-gray-400" />
                     <div className="flex-1">
                       <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                        {`${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || userProfile?.displayName || 'User'}
+                        {`${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'User'}
                       </h3>
                       <p className="text-gray-500 dark:text-gray-400">{user?.email}</p>
                     </div>

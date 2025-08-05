@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export const useInventoryStore = create((set, get) => ({
@@ -45,6 +45,17 @@ export const useInventoryStore = create((set, get) => ({
     try {
       set({ loading: true, error: null });
       
+      // If the product has a batchId, update the batch inventory first
+      if (productData.batchId && productData.variantType && productData.color && productData.size) {
+        await get().updateBatchInventory(
+          productData.batchId,
+          productData.variantType,
+          productData.color,
+          productData.size,
+          productData.quantity
+        );
+      }
+
       if (type === 'uniform') {
         // Add uniform
         const uniformRef = await addDoc(collection(db, 'uniforms'), {
@@ -79,6 +90,35 @@ export const useInventoryStore = create((set, get) => ({
     } catch (error) {
       console.error('Error adding product:', error);
       set({ error: 'Failed to add product', loading: false });
+    }
+  },
+
+  updateBatchInventory: async (batchId, variantType, color, size, quantityToSubtract) => {
+    const batchRef = doc(db, 'batchInventory', batchId);
+    try {
+      const batchDoc = await getDoc(batchRef);
+      if (batchDoc.exists()) {
+        const batchData = batchDoc.data();
+        const updatedItems = batchData.items.map(item => {
+          if (item.variantType === variantType && item.color === color) {
+            const updatedSizes = item.sizes.map(s => {
+              if (s.size === size) {
+                return { ...s, quantity: s.quantity - quantityToSubtract };
+              }
+              return s;
+            });
+            return { ...item, sizes: updatedSizes };
+          }
+          return item;
+        });
+
+        await updateDoc(batchRef, { items: updatedItems });
+      } else {
+        throw new Error('Batch not found');
+      }
+    } catch (error) {
+      console.error('Error updating batch inventory:', error);
+      throw error;
     }
   },
 
