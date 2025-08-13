@@ -151,6 +151,28 @@ The application will be available at `http://localhost:5173`.
 - **`npm run build`**: Builds the application for production.
 - **`npm run preview`**: Serves the production build locally for previewing.
 
+## Deploying to Netlify
+
+To ensure proper routing with React Router on Netlify, a `_redirects` file has been added to the `public` directory. This file contains the following configuration:
+
+```
+/* /index.html 200
+```
+
+This single line instructs Netlify to:
+- Match all routes (`/*`)
+- Serve the `/index.html` file
+- Return a 200 status code (success) instead of 404
+
+### Deployment Steps:
+
+1. Build your project with `npm run build`
+2. Deploy to Netlify, ensuring your publish directory is set to `dist`
+3. After deployment, test a direct URL to a nested route (e.g., `/dashboard`)
+4. Verify that page refreshes on nested routes work correctly
+
+If you encounter 404 errors on routes or refreshes, check that the `_redirects` file was properly included in your build output.
+
 ## Future Enhancements
 
 - **Order Management:** A complete system for creating, tracking, and fulfilling orders.
