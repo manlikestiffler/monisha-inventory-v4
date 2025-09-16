@@ -104,6 +104,7 @@ const AddProductNew = () => {
     category: UNIFORM_CATEGORIES[0],
     type: '',
     gender: '',
+    level: 'JUNIOR',
     image: null,
     imageUrl: '',
     variants: []
@@ -753,6 +754,7 @@ const AddProductNew = () => {
       category: UNIFORM_CATEGORIES[0],
       type: '',
       gender: '',
+      level: 'JUNIOR',
       image: null,
       imageUrl: '',
       variants: []
@@ -881,6 +883,19 @@ const AddProductNew = () => {
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                         <option value="Unisex">Unisex</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <p className="text-gray-700 dark:text-muted-foreground text-sm font-medium mb-2">Level</p>
+                      <Select 
+                        value={uniformData.level} 
+                        onChange={(e) => handleUniformChange('level', e.target.value)} 
+                        required
+                        className="flex-grow"
+                      >
+                        <option value="JUNIOR">Junior</option>
+                        <option value="SENIOR">Senior</option>
                       </Select>
                     </div>
                   </div>

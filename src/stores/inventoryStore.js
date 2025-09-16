@@ -60,7 +60,7 @@ export const useInventoryStore = create((set, get) => ({
         // Add uniform
         const uniformRef = await addDoc(collection(db, 'uniforms'), {
           ...productData,
-          type: 'uniform',
+          productType: 'uniform',
           createdAt: new Date(),
           updatedAt: new Date()
         });
@@ -79,7 +79,7 @@ export const useInventoryStore = create((set, get) => ({
         // Add raw material
         await addDoc(collection(db, 'raw_materials'), {
           ...productData,
-          type: 'raw_material',
+          productType: 'raw_material',
           createdAt: new Date(),
           updatedAt: new Date()
         });

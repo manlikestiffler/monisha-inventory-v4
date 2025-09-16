@@ -36,9 +36,9 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import { useAuthStore } from '../stores/authStore';
 import Modal from '../components/ui/Modal';
 
-// Get unique categories from products
-const getUniqueCategories = (products) => {
-  return [...new Set(products.map(product => product.category))].filter(Boolean);
+// Get unique levels from products
+const getUniqueLevels = (products) => {
+  return [...new Set(products.map(product => product.level))].filter(Boolean);
 };
 
 // Enhanced helper function to calculate detailed stock status
@@ -114,7 +114,7 @@ const getProductImage = (product) => {
 
 const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [levelFilter, setLevelFilter] = useState('all');
   const [schoolFilter, setSchoolFilter] = useState('all');
   const [materialFilter, setMaterialFilter] = useState('all');
   const [batchFilter, setBatchFilter] = useState('all');
@@ -310,7 +310,7 @@ const Inventory = () => {
     // Add headers
     worksheet.columns = [
       { header: 'Product Name', key: 'name', width: 30 },
-      { header: 'Category', key: 'category', width: 20 },
+      { header: 'Level', key: 'level', width: 20 },
       { header: 'School', key: 'school', width: 30 },
       { header: 'Type', key: 'type', width: 20 },
       { header: 'Status', key: 'status', width: 15 },
@@ -331,7 +331,7 @@ const Inventory = () => {
     products.forEach(product => {
       worksheet.addRow({
         name: product.name,
-        category: product.category,
+        level: product.level,
         school: product.schoolName,
         type: product.type,
         status: calculateStockStatus(product.variants).type,
@@ -375,7 +375,7 @@ const Inventory = () => {
     let yOffset = height - 100;
     products.forEach((product, index) => {
       const stockStatus = calculateStockStatus(product.variants);
-      const text = `${index + 1}. ${product.name} - ${product.category} - ${stockStatus.type}`;
+      const text = `${index + 1}. ${product.name} - ${product.level} - ${stockStatus.type}`;
       page.drawText(text, {
         x: 50,
         y: yOffset,
@@ -403,23 +403,23 @@ const Inventory = () => {
       product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.type?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
+    const matchesLevel = levelFilter === 'all' || product.level === levelFilter;
     const matchesSchool = schoolFilter === 'all' || product.school === schoolFilter;
     
     console.log('Search match:', matchesSearch);
-    console.log('Category match:', matchesCategory);
+    console.log('Level match:', matchesLevel);
     console.log('School match:', matchesSchool);
     
-    return matchesSearch && matchesCategory && matchesSchool;
+    return matchesSearch && matchesLevel && matchesSchool;
   });
 
   console.log('Final filtered products:', filteredProducts); // Debug log for final results
 
   const groupedProducts = filteredProducts.reduce((acc, product) => {
-    if (!acc[product.category]) {
-      acc[product.category] = [];
+    if (!acc[product.level]) {
+      acc[product.level] = [];
     }
-    acc[product.category].push(product);
+    acc[product.level].push(product);
     return acc;
   }, {});
 
@@ -756,7 +756,7 @@ const Inventory = () => {
                   batches
                 }}
                 filters={{
-                  category: categoryFilter,
+                  level: levelFilter,
                   school: schoolFilter,
                   material: materialFilter,
                   batch: batchFilter
@@ -791,13 +791,13 @@ const Inventory = () => {
               <div className="flex flex-wrap gap-4">
                 <div className="relative">
                   <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    value={levelFilter}
+                    onChange={(e) => setLevelFilter(e.target.value)}
                     className="appearance-none block w-48 px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-300 pr-10"
                   >
-                    <option value="all">All Categories</option>
-                    {getUniqueCategories(products).map((category) => (
-                      <option key={category} value={category}>{category}</option>
+                    <option value="all">All Levels</option>
+                    {getUniqueLevels(products).map((level) => (
+                      <option key={level} value={level}>{level}</option>
                     ))}
                   </select>
                   <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
@@ -853,7 +853,7 @@ const Inventory = () => {
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
                   <th scope="col" className="px-6 py-3">Product</th>
-                  <th scope="col" className="px-6 py-3">Category</th>
+                  <th scope="col" className="px-6 py-3">Level</th>
                   <th scope="col" className="px-6 py-3">Type</th>
                   <th scope="col" className="px-6 py-3">Gender</th>
                   <th scope="col" className="px-6 py-3">Creator</th>
@@ -878,7 +878,7 @@ const Inventory = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">{product.category || 'N/A'}</td>
+                    <td className="px-6 py-4">{product.level || 'N/A'}</td>
                     <td className="px-6 py-4">{product.type || 'N/A'}</td>
                     <td className="px-6 py-4">{product.gender || 'N/A'}</td>
                     <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-200">{product.creatorName || 'N/A'}</td>
