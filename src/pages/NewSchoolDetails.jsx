@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { useSchoolStore } from '../stores/schoolStore';
 import { useUniformStore } from '../stores/uniformStore';
 import Button from '../components/ui/Button';
@@ -28,8 +30,7 @@ import {
   FiEye,
   FiCheck
 } from 'react-icons/fi';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import UniformDeficitReport from '../components/students/UniformDeficitReport';
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -85,7 +86,7 @@ const UniformCard = ({ uniform, uniformDetails, onRemove, index, level, gender }
             <p className="mt-1 text-sm text-muted-foreground">{uniformDetails?.description || 'No description available'}</p>
           </div>
           <div className="flex items-center space-x-2">
-            {uniform.required ? (
+            {uniform.isRequired ? (
               <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary">
                 <FiCheckCircle className="mr-1 h-3 w-3" />
                 Required
@@ -124,7 +125,7 @@ const UniformCategory = ({ title, uniforms = [], availableUniforms = [], onAddUn
     <div className="space-y-4">
       <div className="flex items-center justify-between bg-card/50 backdrop-blur-sm p-4 rounded-xl border border-border">
         <h3 className="text-lg font-bold text-foreground flex items-center">
-          {gender === 'BOYS' ? (
+          {gender === 'Boys' ? (
             <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mr-3">
               <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
@@ -197,21 +198,21 @@ const UniformLevel = ({ level, requirements = {}, availableUniforms = [], onAddU
       <div className="p-6 space-y-8">
         <UniformCategory
           title="Boys Uniforms"
-          uniforms={requirements[level]?.BOYS || []}
+          uniforms={requirements[level]?.Boys || []}
           availableUniforms={availableUniforms}
           onAddUniform={onAddUniform}
           onRemoveUniform={onRemoveUniform}
           level={level}
-          gender="BOYS"
+          gender="Boys"
         />
         <UniformCategory
           title="Girls Uniforms"
-          uniforms={requirements[level]?.GIRLS || []}
+          uniforms={requirements[level]?.Girls || []}
           availableUniforms={availableUniforms}
           onAddUniform={onAddUniform}
           onRemoveUniform={onRemoveUniform}
           level={level}
-          gender="GIRLS"
+          gender="Girls"
         />
       </div>
     </div>
@@ -219,18 +220,30 @@ const UniformLevel = ({ level, requirements = {}, availableUniforms = [], onAddU
 };
 
 // Uniform Sets Component
-const UniformSets = ({ uniformRequirements = {}, availableUniforms = [], onAddUniform, onRemoveUniform }) => {
+const UniformSets = ({ uniformPolicy = [], availableUniforms = [], onAddUniform, onRemoveUniform }) => {
+  // Convert uniform policy array to requirements structure for compatibility
+  const uniformRequirements = {
+    Junior: { Boys: [], Girls: [] },
+    Senior: { Boys: [], Girls: [] }
+  };
+  
+  uniformPolicy.forEach(policy => {
+    if (uniformRequirements[policy.level] && uniformRequirements[policy.level][policy.gender]) {
+      uniformRequirements[policy.level][policy.gender].push(policy);
+    }
+  });
+
   return (
     <div className="space-y-6">
       <UniformLevel
-        level="JUNIOR"
+        level="Junior"
         requirements={uniformRequirements}
         availableUniforms={availableUniforms}
         onAddUniform={onAddUniform}
         onRemoveUniform={onRemoveUniform}
       />
       <UniformLevel
-        level="SENIOR"
+        level="Senior"
         requirements={uniformRequirements}
         availableUniforms={availableUniforms}
         onAddUniform={onAddUniform}
@@ -245,6 +258,7 @@ const NewSchoolDetails = () => {
   const params = useParams();
   const schoolId = params.id;
   const navigate = useNavigate();
+  const location = useLocation();
   const { 
     schools, 
     uniforms: schoolUniforms,
@@ -254,7 +268,11 @@ const NewSchoolDetails = () => {
     deleteSchool, 
     addStudent: addStudentToSchool, 
     updateStudent: updateStudentInSchool, 
-    deleteStudent: deleteStudentFromSchool 
+    deleteStudent: deleteStudentFromSchool,
+    getStudentsForSchool,
+    addUniformPolicy,
+    removeUniformPolicy,
+    logUniformForStudent
   } = useSchoolStore();
   const { getAvailableUniforms } = useUniformStore();
 
@@ -282,32 +300,85 @@ const NewSchoolDetails = () => {
 
   const [newUniformName, setNewUniformName] = useState('');
   const [showAddUniformNameModal, setShowAddUniformNameModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Function to refresh all school data (students and uniform policies)
+  const refreshSchoolData = async () => {
+    try {
+      const schoolData = await getSchoolById(schoolId);
+      setSchool(schoolData);
+      
+      const studentsData = await getStudentsForSchool(schoolId);
+      setStudents(studentsData || []);
+    } catch (error) {
+      console.error('Error refreshing school data:', error);
+    }
+  };
+  
+  // Legacy function name for backward compatibility
+  const refreshStudentData = refreshSchoolData;
+
+  // Real-time listener for students collection (updates from any platform)
+  useEffect(() => {
+    if (!schoolId) return;
+
+    console.log('🔥 Setting up real-time listener for school:', schoolId);
+
+    const studentsQuery = query(
+      collection(db, 'students'),
+      where('schoolId', '==', schoolId)
+    );
+
+    const unsubscribe = onSnapshot(studentsQuery, (snapshot) => {
+      console.log('🔥 Real-time update received! Students count:', snapshot.docs.length);
+      const studentsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log('🔥 Updated students data:', studentsData.length, 'students');
+      setStudents(studentsData);
+    }, (error) => {
+      console.error('Error listening to students:', error);
+    });
+
+    return () => {
+      console.log('🔥 Cleaning up real-time listener');
+      unsubscribe();
+    };
+  }, [schoolId]);
+
+  // Listen for focus/visibility changes to refresh data
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && schoolId) {
+        refreshSchoolData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [schoolId]);
 
   useEffect(() => {
     const fetchData = async () => {
-      console.log('Current URL params:', window.location.pathname);
-      console.log('School ID from params:', schoolId);
-
       if (!schoolId) {
         console.error('No school ID provided in URL params');
-        setError('No school ID provided');
+        setError('Invalid school ID');
         setLoading(false);
         return;
       }
 
       try {
-        console.log('Starting to fetch data for school:', schoolId);
         setLoading(true);
         setError(null);
 
-        // First fetch uniforms
-        console.log('Fetching uniforms...');
         await fetchUniforms();
-
-        // Then fetch school data
-        console.log('Fetching school data...');
         const schoolData = await getSchoolById(schoolId);
-        console.log('Received school data:', schoolData);
 
         if (!schoolData) {
           console.error('School not found for ID:', schoolId);
@@ -315,9 +386,9 @@ const NewSchoolDetails = () => {
           return;
         }
 
-        console.log('Setting school data in state:', schoolData);
         setSchool(schoolData);
-        setStudents(schoolData.students || []);
+        const studentsData = await getStudentsForSchool(schoolId);
+        setStudents(studentsData || []);
       } catch (err) {
         console.error('Error fetching school:', err);
         setError('Failed to load school details.');
@@ -352,6 +423,17 @@ const NewSchoolDetails = () => {
     fetchAllUsers();
   }, [schoolId, getSchoolById, fetchUniforms, getAvailableUniforms]);
 
+  // Handle refresh from location state (after logging uniform)
+  useEffect(() => {
+    if (location.state?.refresh) {
+      refreshSchoolData();
+      // Clear the state to prevent refresh on subsequent renders
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state]);
+  
+  // Removed auto-refresh - data updates on user actions and tab visibility
+
   const handleEditField = (field) => {
     setIsEditing(field);
     setEditValue(school[field] || '');
@@ -377,8 +459,6 @@ const NewSchoolDetails = () => {
   };
 
   const handleAddUniform = (level, gender) => {
-    console.log('handleAddUniform called with:', { level, gender });
-    
     if (!level || !gender) {
       console.error('Invalid level or gender:', { level, gender });
       return;
@@ -392,7 +472,6 @@ const NewSchoolDetails = () => {
   };
 
   const handleSelectUniform = (uniform) => {
-    console.log('Selected uniform:', uniform);
     setSelectedUniform(uniform);
   };
 
@@ -401,13 +480,6 @@ const NewSchoolDetails = () => {
   const handleToggleRequired = () => setIsUniformRequired(r => !r);
 
   const handleSaveUniform = async () => {
-    console.log('Saving uniform with data:', {
-      selectedUniform,
-      currentUniformTarget,
-      uniformQuantity,
-      isUniformRequired
-    });
-
     if (!selectedUniform) {
       console.error('No uniform selected');
       return;
@@ -421,42 +493,22 @@ const NewSchoolDetails = () => {
     try {
       const { level, gender } = currentUniformTarget;
 
-      // Create new uniform entry
-      const newUniformEntry = {
+      // Create new uniform policy entry (matching mobile app structure)
+      const newUniformPolicy = {
         uniformId: selectedUniform.id,
+        uniformName: selectedUniform.name,
+        uniformType: selectedUniform.type || 'UNIFORM',
+        level,
+        gender,
         quantityPerStudent: uniformQuantity,
-        required: isUniformRequired
+        isRequired: isUniformRequired
       };
 
-      // Get current requirements or initialize if none exist
-      const currentRequirements = school.uniformRequirements || {};
-      
-      // Initialize the level if it doesn't exist
-      if (!currentRequirements[level]) {
-        currentRequirements[level] = {
-          BOYS: [],
-          GIRLS: []
-        };
-      }
+      // Add uniform policy using the store function
+      await addUniformPolicy(schoolId, newUniformPolicy);
 
-      // Initialize the gender array if it doesn't exist
-      if (!currentRequirements[level][gender]) {
-        currentRequirements[level][gender] = [];
-      }
-
-      // Add new uniform to the array
-      currentRequirements[level][gender].push(newUniformEntry);
-
-      console.log('Updating school with requirements:', currentRequirements);
-
-      // Update the school
-      const updatedSchool = await updateSchool(schoolId, {
-        uniformRequirements: currentRequirements
-      });
-
-      console.log('School updated successfully:', updatedSchool);
-
-      // Update local state
+      // Refresh school data
+      const updatedSchool = await getSchoolById(schoolId);
       setSchool(updatedSchool);
       
       // Reset and close modal
@@ -473,41 +525,44 @@ const NewSchoolDetails = () => {
   const getUniformDetailsById = (id) => schoolUniforms.find(u => u.id === id);
 
   const handleRemoveUniform = async (level, gender, index) => {
-    console.log('Attempting to remove uniform:', { level, gender, index });
-
-    const currentRequirements = { ...school.uniformRequirements };
-
-    if (currentRequirements[level] && currentRequirements[level][gender]) {
-      currentRequirements[level][gender].splice(index, 1);
-
-      try {
-        const updatedSchool = await updateSchool(schoolId, {
-          uniformRequirements: currentRequirements,
-        });
+    try {
+      // Get the uniform policy to remove
+      const uniformPolicies = school.uniformPolicy || [];
+      const filteredPolicies = uniformPolicies.filter(policy => 
+        policy.level === level && policy.gender === gender
+      );
+      
+      if (filteredPolicies[index]) {
+        const policyToRemove = filteredPolicies[index];
+        await removeUniformPolicy(schoolId, policyToRemove);
+        
+        // Refresh school data
+        const updatedSchool = await getSchoolById(schoolId);
         setSchool(updatedSchool);
-        console.log('Uniform removed successfully');
-      } catch (error) {
-        console.error('Error removing uniform:', error);
+      } else {
+        console.error('Could not find uniform policy to remove at index:', index);
       }
-    } else {
-      console.error('Could not find uniform to remove at:', { level, gender, index });
+    } catch (error) {
+      console.error('Error removing uniform:', error);
     }
   };
 
   const getUniformRequirementsArray = (level, gender) => {
-    return school?.uniformRequirements?.[level]?.[gender]?.map(req => ({
-      ...req,
-      details: getUniformDetailsById(req.uniformId)
-    })) || [];
+    const uniformPolicies = school?.uniformPolicy || [];
+    return uniformPolicies
+      .filter(policy => policy.level === level && policy.gender === gender)
+      .map(policy => ({
+        ...policy,
+        details: getUniformDetailsById(policy.uniformId)
+      }));
   };
 
   const handleAddStudent = async (studentData) => {
     try {
-      const newStudent = await addStudentToSchool(schoolId, studentData);
-      setSchool(prevSchool => ({
-        ...prevSchool,
-        students: [...(prevSchool.students || []), newStudent]
-      }));
+      const newStudentId = await addStudentToSchool({ ...studentData, schoolId });
+      // Refresh students list
+      const updatedStudents = await getStudentsForSchool(schoolId);
+      setStudents(updatedStudents);
       setShowAddStudentModal(false);
     } catch (error) {
       console.error("Error adding student:", error);
@@ -522,12 +577,10 @@ const NewSchoolDetails = () => {
 
   const handleUpdateStudent = async (updatedStudentData) => {
     try {
-      const updatedStudent = await updateStudentInSchool(schoolId, updatedStudentData);
-      setSchool(prevSchool => ({
-        ...prevSchool,
-        students: (prevSchool.students || []).map(s => s.id === selectedStudent.id ? updatedStudent : s),
-      }));
-      setStudents(prev => prev.map(s => s.id === selectedStudent.id ? updatedStudent : s));
+      await updateStudentInSchool(selectedStudent.id, updatedStudentData);
+      // Refresh students list
+      const updatedStudents = await getStudentsForSchool(schoolId);
+      setStudents(updatedStudents);
       setShowAddStudentModal(false);
       setSelectedStudent(null);
     } catch (error) {
@@ -538,16 +591,10 @@ const NewSchoolDetails = () => {
   
   const handleUpdateStudentUniforms = async (studentData) => {
     try {
-      const updatedStudent = await updateStudentInSchool(schoolId, studentData);
-      
-      // Update local state to trigger re-render
-      const updatedStudents = students.map(s => s.id === updatedStudent.id ? updatedStudent : s);
+      await updateStudentInSchool(studentData.id, studentData);
+      // Refresh students list
+      const updatedStudents = await getStudentsForSchool(schoolId);
       setStudents(updatedStudents);
-      setSchool(prevSchool => ({
-        ...prevSchool,
-        students: updatedStudents,
-      }));
-
     } catch (error) {
       console.error("Error updating student uniforms:", error);
       // Optionally, show a toast or other feedback to the user
@@ -557,11 +604,10 @@ const NewSchoolDetails = () => {
   const handleDeleteStudent = async (studentId) => {
     if (window.confirm('Are you sure you want to delete this student?')) {
       try {
-        await deleteStudentFromSchool(schoolId, studentId);
-        setSchool(prevSchool => ({
-          ...prevSchool,
-          students: (prevSchool.students || []).filter(s => s.id !== studentId),
-        }));
+        await deleteStudentFromSchool(studentId);
+        // Refresh students list
+        const updatedStudents = await getStudentsForSchool(schoolId);
+        setStudents(updatedStudents);
       } catch (error) {
         console.error('Error deleting student:', error);
       }
@@ -580,7 +626,6 @@ const NewSchoolDetails = () => {
 
   const handleEditUniform = (uniform, level, gender, index) => {
     // Logic to handle editing a uniform
-    console.log('Editing uniform:', { uniform, level, gender, index });
     // This might involve opening a modal with the uniform's current data
   };
 
@@ -590,6 +635,7 @@ const NewSchoolDetails = () => {
 
   const studentsTabContent = (
     <ModernStudentList
+      key={`students-${students.length}-${students.map(s => s.id).join('-')}`}
       students={students}
       onEdit={handleEditStudent}
       onDelete={handleDeleteStudent}
@@ -649,13 +695,16 @@ const NewSchoolDetails = () => {
               onAddStudent={() => setShowAddStudentModal(true)}
               uniformsTabContent={
                 <UniformSets
-                  uniformRequirements={school.uniformRequirements}
+                  uniformPolicy={school.uniformPolicy}
                   availableUniforms={schoolUniforms}
                   onAddUniform={handleAddUniform}
                   onRemoveUniform={handleRemoveUniform}
                 />
               }
               studentsTabContent={studentsTabContent}
+              deficitReportTabContent={
+                <UniformDeficitReport school={school} />
+              }
             />
           </div>
         </div>
@@ -683,7 +732,7 @@ const NewSchoolDetails = () => {
             <Button
               variant="outline"
               onClick={() => setShowDeleteConfirm(false)}
-              className="border-gray-600 text-gray-400 hover:bg-gray-800"
+              className="border-gray-300 text-gray-600 hover:bg-gray-50"
             >
               Cancel
             </Button>
@@ -723,40 +772,72 @@ const NewSchoolDetails = () => {
           }}
           title={`Add Uniform to ${currentUniformTarget.level} ${currentUniformTarget.gender}`}
         >
-          <div className="p-6 space-y-6 bg-gray-900">
+          <div className="p-6 space-y-6 bg-white">
             {/* Uniform Selection */}
             <div className="space-y-4">
               <div className="max-h-60 overflow-y-auto space-y-2 rounded-xl">
-                {schoolUniforms.length === 0 ? (
-                  <div className="text-center p-4 bg-gray-800/50 rounded-xl border border-gray-700/50">
-                    <p className="text-gray-400">No uniforms available</p>
-                  </div>
-                ) : (
-                  schoolUniforms.map(uniform => (
-                    <div
-                      key={uniform.id}
-                      onClick={() => handleSelectUniform(uniform)}
-                      className={`p-4 rounded-xl cursor-pointer transition-all duration-200 ${
-                        selectedUniform?.id === uniform.id 
-                          ? 'bg-red-500/10 border-2 border-red-500/50' 
-                          : 'bg-gray-800/50 border border-gray-700/50 hover:border-red-500/30'
-                      }`}
-                    >
-                      <p className="font-medium text-gray-100">{uniform.name}</p>
-                      {uniform.description && (
-                        <p className="mt-1 text-sm text-gray-400">{uniform.description}</p>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+                  {(() => {
+                    // Filter uniforms based on level and gender like mobile app
+                    const filteredUniforms = schoolUniforms.filter(uniform => {
+                      // Check gender compatibility - handle case sensitivity
+                      const uniformGender = uniform.gender?.toLowerCase();
+                      const targetGender = currentUniformTarget.gender?.toLowerCase();
+                      const matchesGender = uniformGender === targetGender || 
+                                           uniformGender === 'unisex' || 
+                                           uniformGender === 'male' && targetGender === 'boys' ||
+                                           uniformGender === 'female' && targetGender === 'girls' ||
+                                           !uniform.gender;
+                      
+                      // Check level compatibility - handle case sensitivity
+                      const uniformLevel = uniform.level?.toUpperCase();
+                      const targetLevel = currentUniformTarget.level?.toUpperCase();
+                      const matchesLevel = uniformLevel === targetLevel || !uniform.level;
+                      
+                      return matchesGender && matchesLevel;
+                    });
+
+                    if (filteredUniforms.length === 0) {
+                      return (
+                        <div className="text-center p-4 bg-gray-50 rounded-xl border border-gray-200">
+                          <p className="text-gray-600">No uniforms available for {currentUniformTarget.level} {currentUniformTarget.gender}</p>
+                          <p className="text-xs text-gray-500 mt-2">Add uniforms with matching level and gender in the Inventory section</p>
+                        </div>
+                      );
+                    }
+
+                    return filteredUniforms.map(uniform => (
+                      <div
+                        key={uniform.id}
+                        onClick={() => handleSelectUniform(uniform)}
+                        className={`p-4 rounded-xl cursor-pointer transition-all duration-200 ${
+                          selectedUniform?.id === uniform.id 
+                            ? 'bg-red-500/10 border-2 border-red-500/50' 
+                            : 'bg-gray-50 border border-gray-200 hover:border-red-500/30'
+                        }`}
+                      >
+                        <p className="font-medium text-gray-900">{uniform.name}</p>
+                        {uniform.description && (
+                          <p className="mt-1 text-sm text-gray-400">{uniform.description}</p>
+                        )}
+                        <div className="mt-2 flex gap-2">
+                          <span className="text-xs px-2 py-1 bg-gray-200 rounded text-gray-700">
+                            {uniform.gender || 'Unisex'}
+                          </span>
+                          <span className="text-xs px-2 py-1 bg-gray-200 rounded text-gray-700">
+                            {uniform.level || 'All Levels'}
+                          </span>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
             </div>
 
             {/* Uniform Configuration */}
             {selectedUniform && (
-              <div className="space-y-4 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50">
+              <div className="space-y-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-300">Quantity per student:</span>
+                  <span className="text-sm font-medium text-gray-700">Quantity per student:</span>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={handleDecrementQuantity}
@@ -764,7 +845,7 @@ const NewSchoolDetails = () => {
                     >
                       -
                     </button>
-                    <span className="w-12 text-center font-medium text-gray-100">{uniformQuantity}</span>
+                    <span className="w-12 text-center font-medium text-gray-900">{uniformQuantity}</span>
                     <button
                       onClick={handleIncrementQuantity}
                       className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -802,7 +883,7 @@ const NewSchoolDetails = () => {
                   setIsUniformRequired(true);
                   setCurrentUniformTarget({ level: null, gender: null });
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-300 bg-gray-800/50 hover:bg-gray-800 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -812,7 +893,7 @@ const NewSchoolDetails = () => {
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                   selectedUniform
                     ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 }`}
               >
                 {selectedUniform ? 'Add to School' : 'Select a Uniform'}

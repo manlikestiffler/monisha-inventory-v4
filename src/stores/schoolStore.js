@@ -9,7 +9,9 @@ import {
   deleteDoc,
   arrayUnion,
   arrayRemove,
-  serverTimestamp
+  serverTimestamp,
+  query,
+  where
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuthStore } from './authStore';
@@ -19,15 +21,9 @@ const useSchoolStore = create((set, get) => ({
   uniforms: [],
   loading: false,
   error: null,
-  lastFetch: null,
 
-  fetchSchools: async (force = false) => {
-    // If we have data and it's less than 5 minutes old, don't fetch again
-    const now = Date.now();
-    if (!force && get().schools.length > 0 && get().lastFetch && now - get().lastFetch < 300000) {
-      return;
-    }
-
+  // Fetch schools directly from Firestore (no caching)
+  fetchSchools: async () => {
     set({ loading: true, error: null });
     try {
       const querySnapshot = await getDocs(collection(db, 'schools'));
@@ -35,29 +31,16 @@ const useSchoolStore = create((set, get) => ({
         id: doc.id,
         ...doc.data()
       }));
-      set({ schools, loading: false, lastFetch: now });
+      set({ schools, loading: false });
     } catch (error) {
       console.error('Error fetching schools:', error);
-      // Check if it's a network error
-      const errorMessage = error.code === 'unavailable' 
-        ? 'Network error. Please check your connection.'
-        : error.message;
-      set({ error: errorMessage, loading: false });
-      // If we have cached data, keep using it
-      if (get().schools.length > 0) {
-        console.log('Using cached school data');
-      }
+      set({ error: error.message, loading: false });
+      throw error;
     }
   },
 
-  fetchUniforms: async (force = false) => {
-    // If we have data and it's less than 5 minutes old, don't fetch again
-    const now = Date.now();
-    if (!force && get().uniforms.length > 0 && get().lastFetch && now - get().lastFetch < 300000) {
-      console.log('Using cached uniforms:', get().uniforms);
-      return get().uniforms;
-    }
-
+  // Fetch uniforms directly from Firestore
+  fetchUniforms: async () => {
     try {
       const uniformsRef = collection(db, 'uniforms');
       const snapshot = await getDocs(uniformsRef);
@@ -65,56 +48,36 @@ const useSchoolStore = create((set, get) => ({
         id: doc.id,
         ...doc.data()
       }));
-      console.log('Fetched fresh uniforms:', uniforms);
-      set({ uniforms, lastFetch: now });
+      set({ uniforms });
       return uniforms;
     } catch (error) {
       console.error('Error fetching uniforms:', error);
-      // If we have cached data, keep using it
-      if (get().uniforms.length > 0) {
-        console.log('Using cached uniforms due to error');
-        return get().uniforms;
-      }
-      return [];
+      throw error;
     }
   },
 
-  getAvailableUniforms: async (force = false) => {
-    // Simply call fetchUniforms to get the uniforms
-    return await get().fetchUniforms(force);
-  },
-
+  // Get school by ID directly from Firestore (force server fetch to sync with mobile)
   getSchoolById: async (id) => {
     try {
-      if (!id) {
-        console.error('No school ID provided');
-        return null;
-      }
-      
-      // First check if we have it in the store
-      const cachedSchool = get().schools.find(school => school.id === id);
-      if (cachedSchool) {
-        return cachedSchool;
-      }
-
       const docRef = doc(db, 'schools', id.toString());
-      const docSnap = await getDoc(docRef);
+      // Force fetch from server to get latest data (including mobile app changes)
+      const docSnap = await getDoc(docRef, { source: 'server' });
       if (docSnap.exists()) {
-        const schoolData = { id: docSnap.id, ...docSnap.data() };
-        // Update the store with this school data
-        set(state => ({
-          schools: state.schools.map(s => s.id === id ? schoolData : s)
-        }));
-        return schoolData;
+        return { id: docSnap.id, ...docSnap.data() };
+      } else {
+        throw new Error('School document does not exist');
       }
-      return null;
     } catch (error) {
-      console.error('Error getting school:', error);
-      // If we have it in cache, return that
-      const cachedSchool = get().schools.find(school => school.id === id);
-      if (cachedSchool) {
-        console.log('Using cached school data');
-        return cachedSchool;
+      // If server fetch fails, try cache as fallback
+      console.warn('Server fetch failed, trying cache:', error);
+      try {
+        const docRef = doc(db, 'schools', id.toString());
+        const docSnap = await getDoc(docRef, { source: 'cache' });
+        if (docSnap.exists()) {
+          return { id: docSnap.id, ...docSnap.data() };
+        }
+      } catch (cacheError) {
+        console.error('Cache fetch also failed:', cacheError);
       }
       throw error;
     }
@@ -125,14 +88,20 @@ const useSchoolStore = create((set, get) => ({
     try {
       const docRef = await addDoc(collection(db, 'schools'), {
         ...schoolData,
+        students: [],
+        uniformPolicy: [],
         status: 'active',
-        createdAt: new Date().toISOString()
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
       const newSchool = {
         id: docRef.id,
         ...schoolData,
+        students: [],
+        uniformPolicy: [],
         status: 'active',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
       set(state => ({
         schools: [...state.schools, newSchool],
@@ -201,41 +170,42 @@ const useSchoolStore = create((set, get) => ({
     }
   },
 
-  addStudent: async (schoolId, studentData) => {
+  // Add student with dual collection approach (mobile app pattern)
+  addStudent: async (studentData) => {
     set({ loading: true, error: null });
     try {
-      const school = await get().getSchoolById(schoolId);
-      if (!school) throw new Error('School not found');
-
       const { user } = useAuthStore.getState();
       const userId = user ? user.uid : 'unknown';
       
-      const newStudent = {
-        id: Date.now().toString(),
+      const newStudentData = {
         ...studentData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: userId,
-        updatedBy: userId
+        uniformLog: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: userId
       };
 
-      await updateDoc(doc(db, 'schools', schoolId), {
-        students: arrayUnion(newStudent)
+      // Create student document in students collection
+      const docRef = await addDoc(collection(db, 'students'), newStudentData);
+      
+      // Create student reference for school document
+      const newStudentForSchool = {
+        id: docRef.id,
+        name: studentData.name,
+        level: studentData.level,
+        gender: studentData.gender,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Add student reference to school document
+      await updateDoc(doc(db, 'schools', studentData.schoolId), {
+        students: arrayUnion(newStudentForSchool),
+        updatedAt: serverTimestamp()
       });
-
-      set(state => ({
-        schools: state.schools.map(school =>
-          school.id === schoolId
-            ? {
-                ...school,
-                students: [...(school.students || []), newStudent]
-              }
-            : school
-        ),
-        loading: false
-      }));
-
-      return newStudent;
+      
+      set({ loading: false });
+      console.log('Student added successfully with ID:', docRef.id);
+      return docRef.id;
     } catch (error) {
       console.error('Error adding student:', error);
       set({ error: error.message, loading: false });
@@ -243,48 +213,23 @@ const useSchoolStore = create((set, get) => ({
     }
   },
 
-  updateStudent: async (schoolId, studentData) => {
+  // Update student in students collection
+  updateStudent: async (studentId, studentData) => {
     set({ loading: true, error: null });
     try {
-      const school = await get().getSchoolById(schoolId);
-      if (!school) throw new Error('School not found');
-
       const { user } = useAuthStore.getState();
       const userId = user ? user.uid : 'unknown';
-
-      const studentId = studentData.id;
-      if (!studentId) throw new Error('Student ID is required');
-
-      const studentIndex = school.students.findIndex(s => s.id === studentId);
-      if (studentIndex === -1) throw new Error('Student not found');
-
-      const updatedStudent = {
-        ...school.students[studentIndex],
+      
+      const updatedData = {
         ...studentData,
-        updatedAt: new Date().toISOString(),
+        updatedAt: serverTimestamp(),
         updatedBy: userId
       };
-
-      const updatedStudents = [...school.students];
-      updatedStudents[studentIndex] = updatedStudent;
-
-      await updateDoc(doc(db, 'schools', schoolId), {
-        students: updatedStudents
-      });
-
-      set(state => ({
-        schools: state.schools.map(s =>
-          s.id === schoolId
-            ? {
-                ...s,
-                students: updatedStudents
-              }
-            : s
-        ),
-        loading: false
-      }));
-
-      return updatedStudent;
+      
+      await updateDoc(doc(db, 'students', studentId), updatedData);
+      
+      set({ loading: false });
+      return updatedData;
     } catch (error) {
       console.error('Error updating student:', error);
       set({ error: error.message, loading: false });
@@ -292,30 +237,35 @@ const useSchoolStore = create((set, get) => ({
     }
   },
 
+  // Delete student from both collections (mobile app pattern)
   deleteStudent: async (schoolId, studentId) => {
     set({ loading: true, error: null });
     try {
+      console.log('Starting student deletion process...');
+      
+      // Delete from students collection
+      try {
+        await deleteDoc(doc(db, 'students', studentId));
+        console.log('Student deleted from students collection');
+      } catch (error) {
+        console.log('Student not found in students collection or already deleted');
+      }
+      
+      // Get current school data
       const school = await get().getSchoolById(schoolId);
       if (!school) throw new Error('School not found');
 
-      const studentToRemove = school.students.find(student => student.id === studentId);
-      if (!studentToRemove) throw new Error('Student not found');
-
+      // Filter out the student and update school document
+      const updatedStudents = (school.students || []).filter(student => student.id !== studentId);
+      
       await updateDoc(doc(db, 'schools', schoolId), {
-        students: arrayRemove(studentToRemove)
+        students: updatedStudents,
+        updatedAt: serverTimestamp()
       });
-
-      set(state => ({
-        schools: state.schools.map(school =>
-          school.id === schoolId
-            ? {
-                ...school,
-                students: school.students.filter(student => student.id !== studentId)
-              }
-            : school
-        ),
-        loading: false
-      }));
+      
+      console.log('Student removed from school document');
+      set({ loading: false });
+      
     } catch (error) {
       console.error('Error deleting student:', error);
       set({ error: error.message, loading: false });
@@ -323,48 +273,207 @@ const useSchoolStore = create((set, get) => ({
     }
   },
 
-  updateUniformRequirements: async (schoolId, requirements) => {
+  // Add uniform policy (web app uses this name)
+  addUniformPolicy: async (schoolId, policyData) => {
     set({ loading: true, error: null });
     try {
-      await updateDoc(doc(db, 'schools', schoolId.toString()), {
-        uniformRequirements: requirements
+      const docRef = doc(db, 'schools', schoolId.toString());
+      
+      // Get current school data
+      const currentSchool = await getDoc(docRef);
+      const currentData = currentSchool.data();
+      
+      // Initialize uniformPolicy array if it doesn't exist
+      const currentPolicies = currentData?.uniformPolicy || [];
+      
+      // Create new policy object (matching mobile app structure)
+      const newPolicy = {
+        id: Date.now().toString(),
+        uniformId: policyData.uniformId,
+        uniformName: policyData.uniformName,
+        uniformType: policyData.uniformType || 'UNIFORM',
+        level: policyData.level,
+        gender: policyData.gender,
+        isRequired: policyData.isRequired !== undefined ? policyData.isRequired : true,
+        quantityPerStudent: policyData.quantityPerStudent || 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Add to policies array
+      const updatedPolicies = [...currentPolicies, newPolicy];
+      
+      // Update the document
+      await updateDoc(docRef, {
+        uniformPolicy: updatedPolicies,
+        updatedAt: serverTimestamp()
       });
-      set(state => ({
-        schools: state.schools.map(school =>
-          school.id === schoolId ? { ...school, uniformRequirements: requirements } : school
-        ),
-        loading: false
-      }));
+      
+      set({ loading: false });
+      return newPolicy;
     } catch (error) {
-      console.error('Error updating uniform requirements:', error);
+      console.error('Error adding school uniform policy:', error);
       set({ error: error.message, loading: false });
       throw error;
     }
   },
 
-  updateStudentUniform: async (schoolId, studentId, uniformInventory) => {
-    set(state => ({
-      schools: state.schools.map(school => {
-        if (school.id === schoolId) {
-          return {
-            ...school,
-            students: school.students.map(student => {
-              if (student.id === studentId) {
-                return {
-                  ...student,
-                  uniformInventory: {
-                    ...student.uniformInventory,
-                    ...uniformInventory
-                  }
-                };
-              }
-              return student;
-            })
-          };
+  // Update school uniform policy (mobile app pattern - alias for mobile compatibility)
+  updateSchoolUniformPolicy: async (schoolId, policyData) => {
+    return await get().addUniformPolicy(schoolId, policyData);
+  },
+
+  // Remove uniform policy (web app uses this name)
+  removeUniformPolicy: async (schoolId, policyToRemove) => {
+    set({ loading: true, error: null });
+    try {
+      const docRef = doc(db, 'schools', schoolId.toString());
+      
+      // Get current school data
+      const currentSchool = await getDoc(docRef);
+      const currentData = currentSchool.data();
+      
+      // Filter out the policy to remove
+      // Handle both old policies (without id) and new policies (with id)
+      const updatedPolicies = (currentData?.uniformPolicy || []).filter(policy => {
+        // If both have id fields, match by id
+        if (policy.id && policyToRemove.id) {
+          return policy.id !== policyToRemove.id;
         }
-        return school;
-      })
-    }));
+        
+        // For old policies without id, match by all key fields
+        return !(
+          policy.uniformId === policyToRemove.uniformId &&
+          policy.level === policyToRemove.level &&
+          policy.gender === policyToRemove.gender
+        );
+      });
+      
+      console.log('Policies before removal:', currentData?.uniformPolicy?.length);
+      console.log('Policies after removal:', updatedPolicies.length);
+      
+      // Update the document
+      await updateDoc(docRef, {
+        uniformPolicy: updatedPolicies,
+        updatedAt: serverTimestamp()
+      });
+      
+      set({ loading: false });
+      return true;
+    } catch (error) {
+      console.error('Error removing school uniform policy:', error);
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
+  // Remove school uniform policy (mobile app pattern - alias for mobile compatibility)
+  removeSchoolUniformPolicy: async (schoolId, policyId) => {
+    return await get().removeUniformPolicy(schoolId, policyId);
+  },
+
+  // Get policies for school with filtering
+  getSchoolUniformPolicies: async (schoolId, level = null, gender = null) => {
+    try {
+      const school = await get().getSchoolById(schoolId);
+      if (!school?.uniformPolicy) return [];
+      
+      let policies = school.uniformPolicy;
+      
+      if (level) policies = policies.filter(p => p.level === level);
+      if (gender) policies = policies.filter(p => p.gender === gender);
+      
+      return policies;
+    } catch (error) {
+      console.error('Error getting uniform policies:', error);
+      return [];
+    }
+  },
+
+  // Get all students for a specific school
+  getStudentsForSchool: async (schoolId) => {
+    try {
+      const q = query(
+        collection(db, 'students'),
+        where('schoolId', '==', schoolId)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      const students = [];
+      querySnapshot.forEach((doc) => {
+        students.push({ id: doc.id, ...doc.data() });
+      });
+      
+      return students;
+    } catch (error) {
+      console.error('Error fetching students for school:', error);
+      throw error;
+    }
+  },
+
+  // Get student count for a specific school
+  getStudentCountForSchool: async (schoolId) => {
+    try {
+      const q = query(
+        collection(db, 'students'),
+        where('schoolId', '==', schoolId)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.size;
+    } catch (error) {
+      console.error('Error getting student count for school:', error);
+      return 0;
+    }
+  },
+
+  // Get total student count across all schools
+  getTotalStudentCount: async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'students'));
+      return querySnapshot.size;
+    } catch (error) {
+      console.error('Error getting total student count:', error);
+      return 0;
+    }
+  },
+
+  // Student uniform logging functions
+  updateStudentUniformLog: async (studentId, logEntry) => {
+    try {
+      const docRef = doc(db, 'students', studentId.toString());
+      
+      // Add the log entry to the uniformLog array
+      await updateDoc(docRef, {
+        uniformLog: arrayUnion(logEntry),
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log('Student uniform log updated successfully');
+    } catch (error) {
+      console.error('Error updating student uniform log:', error);
+      throw error;
+    }
+  },
+
+  // Get student by ID from students collection
+  getStudentById: async (studentId) => {
+    try {
+      const docRef = doc(db, 'students', studentId.toString());
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+      } else {
+        throw new Error('Student not found');
+      }
+    } catch (error) {
+      console.error('Error getting student:', error);
+      throw error;
+    }
+  },
+
+  // Get students by school ID (alias for getStudentsForSchool for compatibility)
+  getStudentsBySchool: async (schoolId) => {
+    return await get().getStudentsForSchool(schoolId);
   }
 }));
 

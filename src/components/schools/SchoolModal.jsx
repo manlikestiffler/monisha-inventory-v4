@@ -27,16 +27,7 @@ const defaultSchoolData = {
   name: '',
   phone: '',
   email: '',
-  uniformRequirements: {
-    JUNIOR: {
-      BOYS: [],
-      GIRLS: []
-    },
-    SENIOR: {
-      BOYS: [],
-      GIRLS: []
-    }
-  },
+  uniformPolicy: [], // Updated to match mobile app structure
   students: []
 };
 

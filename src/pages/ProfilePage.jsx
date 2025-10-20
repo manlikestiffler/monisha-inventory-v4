@@ -28,7 +28,7 @@ const LoadingButton = ({ isLoading, text, loadingText }) => (
 
 const ProfilePage = () => {
   const navigate = useNavigate();
-  const { user, userProfile, userRole, saveStaffProfile, saveManagerProfile } = useAuthStore();
+  const { user, userProfile, userRole, saveStaffProfile, saveManagerProfile, fetchUserProfile } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     photoURL: userProfile?.photoURL || '',
@@ -41,6 +41,31 @@ const ProfilePage = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef(null);
+
+  // Fetch user profile on component mount and when user changes
+  React.useEffect(() => {
+    console.log('🔍 ProfilePage: Checking user for profile fetch', { uid: user?.uid, email: user?.email });
+    if (user?.uid) {
+      console.log('🔍 ProfilePage: Fetching user profile for uid:', user.uid);
+      fetchUserProfile(user.uid);
+    }
+  }, [user?.uid, fetchUserProfile]);
+
+  // Update form data when userProfile changes
+  React.useEffect(() => {
+    console.log('🔍 ProfilePage: UserProfile changed:', userProfile);
+    if (userProfile) {
+      const newFormData = {
+        photoURL: userProfile.photoURL || '',
+        phoneNumber: userProfile.phoneNumber || '',
+        nationalId: userProfile.nationalId || '',
+        firstName: userProfile.firstName || '',
+        lastName: userProfile.lastName || '',
+      };
+      console.log('🔍 ProfilePage: Setting form data:', newFormData);
+      setFormData(newFormData);
+    }
+  }, [userProfile]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -136,14 +161,24 @@ const ProfilePage = () => {
         updatedAt: new Date().toISOString(),
       };
 
+      console.log('🔍 ProfilePage: Saving profile data:', updateData);
+      console.log('🔍 ProfilePage: User role:', userRole);
+      console.log('🔍 ProfilePage: User UID:', user.uid);
+
       if (userRole === 'manager') {
-        await saveManagerProfile(user.uid, updateData);
+        const result = await saveManagerProfile(user.uid, updateData);
+        console.log('🔍 ProfilePage: Manager profile save result:', result);
       } else {
-        await saveStaffProfile(user.uid, updateData);
+        const result = await saveStaffProfile(user.uid, updateData);
+        console.log('🔍 ProfilePage: Staff profile save result:', result);
       }
 
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
       setIsEditing(false);
+      
+      // Force refetch after save
+      console.log('🔍 ProfilePage: Force refetching profile after save');
+      await fetchUserProfile(user.uid);
     } catch (error) {
       console.error('Error updating profile:', error);
       setMessage({ type: 'error', text: 'Failed to update profile. Please try again.' });
@@ -153,9 +188,9 @@ const ProfilePage = () => {
   };
 
   return (
-    <div className="p-6 space-y-8 bg-gray-50 dark:bg-gray-900 min-h-screen">
+    <div className="p-6 space-y-8 bg-gray-50 dark:bg-black min-h-screen">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-black p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
         <div className="flex items-center">
           <button
             onClick={() => navigate(-1)}
@@ -183,7 +218,7 @@ const ProfilePage = () => {
       </div>
 
       {/* Profile Content */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-black rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
         <div className="p-6 md:p-8">
           {message.text && (
             <div className={`mb-6 p-4 rounded-lg ${
@@ -380,9 +415,9 @@ const ProfilePage = () => {
 };
 
 const InfoItem = ({ icon, label, value, badgeColor }) => (
-  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+  <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
     <div className="flex items-center mb-2">
-      <div className="text-gray-400 mr-3">{icon}</div>
+      <div className="text-gray-400 dark:text-gray-500 mr-3">{icon}</div>
       <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
     </div>
     {badgeColor ? (

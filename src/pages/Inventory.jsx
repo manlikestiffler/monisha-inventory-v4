@@ -131,9 +131,11 @@ const Inventory = () => {
   const [selectedProducts, setSelectedProducts] = useState(null);
   const [error, setError] = useState(null);
   const [schoolsMap, setSchoolsMap] = useState({});
+  const [users, setUsers] = useState([]);
+  const [usersMap, setUsersMap] = useState({});
   const { isManager } = useAuthStore();
 
-  const { deleteProduct } = useInventoryStore();
+  const { products: storeProducts, loading: storeLoading, error: storeError, setupRealtimeListeners, cleanup } = useInventoryStore();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
@@ -195,87 +197,277 @@ const Inventory = () => {
     fetchBatches();
   }, []);
 
-  // Fetch products when component mounts
+  // Setup real-time listeners when component mounts
   useEffect(() => {
-    const fetchProducts = async () => {
+    const initializeData = async () => {
       setLoading(true);
       try {
-        // Fetch users from both staff and managers collections
-        const staffSnapshot = await getDocs(collection(db, 'inventory_staff'));
-        const managersSnapshot = await getDocs(collection(db, 'inventory_managers'));
-        const usersMap = {};
+        // Check what collections actually exist and fetch users
+        console.log('Checking for user collections...');
         
-        const processSnapshot = (snapshot) => {
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            usersMap[doc.id] = {
-              ...data,
-              name: `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName,
-            };
-          });
-        };
-
-        processSnapshot(staffSnapshot);
-        processSnapshot(managersSnapshot);
-
-        console.log('Users map:', usersMap); // Debug log for usersMap
-
-        // Fetch uniforms
-        const uniformsQuery = query(
-          collection(db, 'uniforms'),
-          orderBy('createdAt', 'desc')
-        );
+        // Try different possible collection names for users
+        const possibleCollections = ['staff', 'managers', 'users', 'accounts'];
+        const userCollections = {};
         
-        const uniformsSnapshot = await getDocs(uniformsQuery);
+        for (const collectionName of possibleCollections) {
+          try {
+            const snapshot = await getDocs(collection(db, collectionName));
+            if (snapshot.size > 0) {
+              userCollections[collectionName] = snapshot;
+              console.log(`Found ${snapshot.size} documents in ${collectionName} collection`);
+            }
+          } catch (error) {
+            console.log(`Collection ${collectionName} not accessible:`, error.message);
+          }
+        }
         
-        const uniformsData = uniformsSnapshot.docs.map(doc => {
-          const data = doc.data();
-          const creatorInfo = usersMap[data.createdByUid] || { name: 'N/A', role: 'N/A' };
+        // If no user collections found, extract creator info from products
+        if (Object.keys(userCollections).length === 0) {
+          console.log('No user collections found. Extracting creator info from products...');
           
-          return {
+          // Get products to extract creator information
+          const uniformsSnapshot = await getDocs(collection(db, 'uniforms'));
+          const materialsSnapshot = await getDocs(collection(db, 'raw_materials'));
+          
+          const creatorMap = {};
+          
+          // Extract creator info from uniforms - prefer full name over email
+          uniformsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.createdByUid && (data.createdByName || data.createdBy)) {
+              creatorMap[data.createdByUid] = {
+                name: data.createdByName || data.createdBy,
+                role: data.createdByRole || 'staff' // Default role
+              };
+            }
+          });
+          
+          // Extract creator info from materials - prefer full name over email
+          materialsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.createdByUid && (data.createdByName || data.createdBy)) {
+              creatorMap[data.createdByUid] = {
+                name: data.createdByName || data.createdBy,
+                role: data.createdByRole || 'staff' // Default role
+              };
+            }
+          });
+          
+          console.log('Creator map extracted from products:', creatorMap);
+          setUsersMap(creatorMap);
+          
+          // Continue with the rest of initialization
+          const schoolsQuery = query(collection(db, 'schools'), orderBy('createdAt', 'desc'));
+          const schoolsSnapshot = await getDocs(schoolsQuery);
+          const schoolsData = schoolsSnapshot.docs.map(doc => ({
             id: doc.id,
-            ...data,
-            creatorName: creatorInfo.name,
-            creatorRole: creatorInfo.role,
-            createdAt: data.createdAt?.toDate(),
-            updatedAt: data.updatedAt?.toDate()
+            ...doc.data()
+          }));
+          setSchools(schoolsData);
+          
+          setupRealtimeListeners();
+          
+          setTimeout(async () => {
+            if (storeProducts.length === 0) {
+              console.log('No products from real-time listeners, fetching directly...');
+              await fetchProductsDirectly();
+            }
+          }, 3000);
+          
+          setLoading(false);
+          return;
+        }
+        
+        // Process found user collections
+        const allUsers = [];
+        
+        Object.entries(userCollections).forEach(([collectionName, snapshot]) => {
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            console.log(`${collectionName} user:`, doc.id, data);
+            allUsers.push({
+              id: doc.id,
+              ...data,
+              role: collectionName === 'managers' ? 'manager' : 'staff'
+            });
+          });
+        });
+        
+        console.log('Total users found:', allUsers.length);
+        setUsers(allUsers);
+        
+        // Create users map for quick lookup
+        const usersMapData = {};
+        allUsers.forEach(user => {
+          usersMapData[user.id] = {
+            name: user.name || user.email || 'Unknown User',
+            role: user.role || 'N/A'
           };
         });
-
-        // Fetch raw materials
-        const materialsQuery = query(
-          collection(db, 'raw_materials'),
-          orderBy('createdAt', 'desc')
-        );
+        setUsersMap(usersMapData);
+        console.log('Users map created with', Object.keys(usersMapData).length, 'users:', usersMapData);
         
-        const materialsSnapshot = await getDocs(materialsQuery);
-        const materialsData = materialsSnapshot.docs.map(doc => {
-          const data = doc.data();
-          const creatorInfo = usersMap[data.createdByUid] || { name: 'N/A', role: 'N/A' };
-          return {
-            id: doc.id,
-            ...data,
-            variants: [], // Raw materials don't have variants
-            creatorName: creatorInfo.name,
-            creatorRole: creatorInfo.role,
-            createdAt: data.createdAt?.toDate(),
-            updatedAt: data.updatedAt?.toDate()
-          };
-        });
+        // Fetch schools
+        const schoolsQuery = query(collection(db, 'schools'), orderBy('createdAt', 'desc'));
+        const schoolsSnapshot = await getDocs(schoolsQuery);
+        const schoolsData = schoolsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setSchools(schoolsData);
         
-        const allProducts = [...uniformsData, ...materialsData];
-        setProducts(allProducts);
+        // Setup real-time listeners for products
+        setupRealtimeListeners();
+        
+        // Fallback: If no products after 3 seconds, fetch directly
+        setTimeout(async () => {
+          if (storeProducts.length === 0) {
+            console.log('No products from real-time listeners, fetching directly...');
+            await fetchProductsDirectly();
+          }
+        }, 3000);
         
       } catch (error) {
-        console.error('Error fetching products:', error);
-        setError('Failed to fetch products.');
+        console.error('Error fetching data:', error);
+        setError('Failed to load inventory data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProducts();
+    initializeData();
+    
+    // Cleanup listeners on unmount
+    return () => {
+      cleanup();
+    };
   }, []);
+
+  // Use store products with user info mapping
+  useEffect(() => {
+    console.log('Store products changed:', storeProducts?.length || 0);
+    console.log('Users map keys:', Object.keys(usersMap).length);
+    
+    if (storeProducts && storeProducts.length > 0) {
+      const productsWithUserInfo = storeProducts.map(product => {
+        // Check if product already has creator info from store
+        if (product.creatorName && product.creatorRole) {
+          return {
+            ...product,
+            createdAt: product.createdAt?.toDate ? product.createdAt.toDate() : product.createdAt,
+            updatedAt: product.updatedAt?.toDate ? product.updatedAt.toDate() : product.updatedAt
+          };
+        }
+        
+        // Fallback to local users map
+        const creatorInfo = usersMap[product.createdByUid];
+        console.log('Product creator lookup:', product.createdByUid, creatorInfo);
+        
+        return {
+          ...product,
+          creatorName: creatorInfo?.name || 'N/A',
+          creatorRole: creatorInfo?.role || 'N/A',
+          createdAt: product.createdAt?.toDate ? product.createdAt.toDate() : product.createdAt,
+          updatedAt: product.updatedAt?.toDate ? product.updatedAt.toDate() : product.updatedAt
+        };
+      });
+      setProducts(productsWithUserInfo);
+      console.log('Products updated with user info:', productsWithUserInfo.length);
+    } else if (storeProducts && storeProducts.length === 0) {
+      setProducts([]);
+      console.log('No products in store, clearing local products');
+    }
+  }, [storeProducts, usersMap]);
+
+  // Direct fetch products function as fallback
+  const fetchProductsDirectly = async () => {
+    try {
+      console.log('Fetching products directly from Firestore...');
+      
+      // Extract creator info directly from products
+      const directUsersMap = {};
+      
+      console.log('Extracting creator info from products for direct fetch...');
+      
+      // Fetch uniforms
+      const uniformsQuery = query(
+        collection(db, 'uniforms'),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const uniformsSnapshot = await getDocs(uniformsQuery);
+      
+      const uniformsData = uniformsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        
+        // Extract creator info from the product itself - prefer full name over email
+        const creatorName = data.createdByName || data.createdBy || 'N/A';
+        const creatorRole = data.createdByRole || 'staff'; // Default role
+        
+        // Add to direct users map for consistency
+        if (data.createdByUid && (data.createdByName || data.createdBy)) {
+          directUsersMap[data.createdByUid] = {
+            name: data.createdByName || data.createdBy,
+            role: data.createdByRole || 'staff'
+          };
+        }
+        
+        console.log('Direct uniform creator:', data.createdByName || data.createdBy || data.createdByUid);
+        
+        return {
+          id: doc.id,
+          ...data,
+          creatorName: creatorName,
+          creatorRole: creatorRole,
+          createdAt: data.createdAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate()
+        };
+      });
+
+      // Fetch raw materials
+      const materialsQuery = query(
+        collection(db, 'raw_materials'),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const materialsSnapshot = await getDocs(materialsQuery);
+      const materialsData = materialsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        
+        // Extract creator info from the product itself - prefer full name over email
+        const creatorName = data.createdByName || data.createdBy || 'N/A';
+        const creatorRole = data.createdByRole || 'staff'; // Default role
+        
+        // Add to direct users map for consistency
+        if (data.createdByUid && (data.createdByName || data.createdBy)) {
+          directUsersMap[data.createdByUid] = {
+            name: data.createdByName || data.createdBy,
+            role: data.createdByRole || 'staff'
+          };
+        }
+        
+        console.log('Direct material creator:', data.createdByName || data.createdBy || data.createdByUid);
+        
+        return {
+          id: doc.id,
+          ...data,
+          variants: [], // Raw materials don't have variants
+          creatorName: creatorName,
+          creatorRole: creatorRole,
+          createdAt: data.createdAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate()
+        };
+      });
+      
+      const allProducts = [...uniformsData, ...materialsData];
+      setProducts(allProducts);
+      console.log('Direct fetch completed:', allProducts.length, 'products loaded with creator info');
+      
+    } catch (error) {
+      console.error('Error in direct fetchProducts:', error);
+      setError('Failed to load products');
+    }
+  };
 
   const handleEdit = (product) => {
     navigate(`/inventory/edit/${product.id}`);

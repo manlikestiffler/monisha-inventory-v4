@@ -4,6 +4,7 @@ import App from './App.jsx';
 import './index.css';
 import { useAuthStore } from './stores/authStore';
 import { ThemeProvider } from './components/ThemeProvider.jsx';
+import { getInitialTheme, applyTheme } from './utils/theme';
 
 // Initialize the first user check
 const initializeApp = async () => {
@@ -11,19 +12,14 @@ const initializeApp = async () => {
     // Check if this is the first user registration
     await useAuthStore.getState().initializeFirstUserCheck();
     
-    // Get system theme preference
-    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    
-    // Get stored theme or use system preference
-    const storedTheme = localStorage.getItem('vite-ui-theme') || 'system';
-    
-    // Apply initial theme class
-    document.documentElement.classList.add(storedTheme === 'system' ? systemTheme : storedTheme);
+    // Apply initial theme before rendering
+    const initialTheme = getInitialTheme();
+    applyTheme(initialTheme);
     
     // Proceed with rendering the app
     ReactDOM.createRoot(document.getElementById('root')).render(
       <React.StrictMode>
-        <ThemeProvider defaultTheme={storedTheme} storageKey="vite-ui-theme">
+        <ThemeProvider defaultTheme="system" storageKey="app-theme">
           <App />
         </ThemeProvider>
       </React.StrictMode>
@@ -31,10 +27,13 @@ const initializeApp = async () => {
   } catch (error) {
     console.error('Error initializing app:', error);
     
+    // Apply fallback theme
+    applyTheme('light');
+    
     // Render the app anyway, even if initialization failed
     ReactDOM.createRoot(document.getElementById('root')).render(
       <React.StrictMode>
-        <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <ThemeProvider defaultTheme="system" storageKey="app-theme">
           <App />
         </ThemeProvider>
       </React.StrictMode>

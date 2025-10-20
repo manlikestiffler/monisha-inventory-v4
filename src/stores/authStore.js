@@ -53,19 +53,30 @@ export const useAuthStore = create((set, get) => ({
   // Create or update staff profile in Firestore
   saveStaffProfile: async (uid, profileData) => {
     try {
+      console.log('🔍 AuthStore: saveStaffProfile called', { uid, profileData });
       set({ loading: true });
       const currentProfile = get().userProfile || {};
-      const updatedProfile = { ...currentProfile, ...profileData, role: 'staff', updatedAt: new Date().toISOString() };
+      const updatedProfile = { 
+        ...currentProfile, 
+        ...profileData, 
+        role: 'staff', 
+        appOrigin: 'inventory',
+        updatedAt: new Date().toISOString() 
+      };
       
+      console.log('🔍 AuthStore: Saving to inventory_staff collection:', updatedProfile);
       await setDoc(doc(db, 'inventory_staff', uid), updatedProfile, { merge: true });
+      console.log('🔍 AuthStore: Successfully saved to Firebase');
       
       set({ 
         userProfile: updatedProfile,
         userRole: 'staff',
         loading: false 
       });
+      console.log('🔍 AuthStore: Updated store state');
       return true;
     } catch (error) {
+      console.error('🔍 AuthStore: Error saving staff profile:', error);
       set({ error: error.message, loading: false });
       return false;
     }
@@ -74,19 +85,30 @@ export const useAuthStore = create((set, get) => ({
   // Create or update manager profile in Firestore (for admin use)
   saveManagerProfile: async (uid, profileData) => {
     try {
+      console.log('🔍 AuthStore: saveManagerProfile called', { uid, profileData });
       set({ loading: true });
       const currentProfile = get().userProfile || {};
-      const updatedProfile = { ...currentProfile, ...profileData, role: 'manager', updatedAt: new Date().toISOString() };
+      const updatedProfile = { 
+        ...currentProfile, 
+        ...profileData, 
+        role: 'manager', 
+        appOrigin: 'inventory',
+        updatedAt: new Date().toISOString() 
+      };
 
+      console.log('🔍 AuthStore: Saving to inventory_managers collection:', updatedProfile);
       await setDoc(doc(db, 'inventory_managers', uid), updatedProfile, { merge: true });
+      console.log('🔍 AuthStore: Successfully saved to Firebase');
       
       set({ 
         userProfile: updatedProfile,
         userRole: 'manager',
         loading: false 
       });
+      console.log('🔍 AuthStore: Updated store state');
       return true;
     } catch (error) {
+      console.error('🔍 AuthStore: Error saving manager profile:', error);
       set({ error: error.message, loading: false });
       return false;
     }
@@ -94,35 +116,44 @@ export const useAuthStore = create((set, get) => ({
   
   // Fetch user profile from both collections
   fetchUserProfile: async (uid) => {
+    console.log('🔍 AuthStore: fetchUserProfile called with uid:', uid);
     if (!uid) {
+      console.log('🔍 AuthStore: No UID provided, clearing profile');
       set({ userProfile: null, userRole: null });
       return;
     }
     
     try {
+      console.log('🔍 AuthStore: Checking inventory_managers collection');
       let userDoc = await getDoc(doc(db, 'inventory_managers', uid));
       let role = 'manager';
       
       if (!userDoc.exists()) {
+        console.log('🔍 AuthStore: Not found in managers, checking inventory_staff');
         userDoc = await getDoc(doc(db, 'inventory_staff', uid));
         role = 'staff';
       }
       
       if (userDoc.exists()) {
         const profile = userDoc.data();
+        console.log('🔍 AuthStore: Found profile data:', profile);
+        console.log('🔍 AuthStore: Profile role:', role);
         
         // Check for app-specific identifier
         if (profile.appOrigin !== 'inventory') {
+          console.log('🔍 AuthStore: User not authorized - wrong app origin:', profile.appOrigin);
           set({ userProfile: null, userRole: null, error: 'User is not authorized for this application.' });
           return;
         }
 
+        console.log('🔍 AuthStore: Setting profile in store:', { profile, role });
         set({ userProfile: profile, userRole: role });
       } else {
+        console.log('🔍 AuthStore: No profile found in either collection');
         set({ userProfile: null, userRole: null });
       }
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('🔍 AuthStore: Error fetching user profile:', error);
       set({ error: 'Failed to fetch user profile.' });
     }
   },
@@ -210,6 +241,40 @@ export const useAuthStore = create((set, get) => ({
   },
 
   // Delete a user from Firebase Auth and Firestore
+  // Update user profile
+  updateProfile: async (profileData) => {
+    const state = get();
+    const uid = state.user?.uid;
+    const role = state.userRole;
+    
+    if (!uid || !role) {
+      throw new Error('User not authenticated or role not found');
+    }
+
+    try {
+      set({ loading: true });
+      const currentProfile = state.userProfile || {};
+      const updatedProfile = { 
+        ...currentProfile, 
+        ...profileData, 
+        role: role,
+        updatedAt: new Date().toISOString() 
+      };
+      
+      const collection = role === 'manager' ? 'inventory_managers' : 'inventory_staff';
+      await setDoc(doc(db, collection, uid), updatedProfile, { merge: true });
+      
+      set({ 
+        userProfile: updatedProfile,
+        loading: false 
+      });
+      return true;
+    } catch (error) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
   deleteUser: async (uid) => {
     const state = get();
     if (!state.isManager() && !state.isSuperAdmin()) {

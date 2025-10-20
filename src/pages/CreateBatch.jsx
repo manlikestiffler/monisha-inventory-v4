@@ -298,7 +298,7 @@ const CreateBatch = () => {
         </button>
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Create New Batch</h1>
-          <p className="text-gray-500 dark:text-gray-400">Add a new batch of uniforms to inventory</p>
+          <p className="text-gray-500 dark:text-gray-400 ml-0">Add a new batch of uniforms to inventory</p>
         </div>
       </div>
 

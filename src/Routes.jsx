@@ -18,7 +18,7 @@ import Reports from './pages/Reports';
 import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
-import UserManagement from './pages/UserManagement';
+import AdminSuperAdmin from './pages/AdminSuperAdmin';
 import PrivateRoute from './components/PrivateRoute';
 import { useAuthStore } from './stores/authStore';
 import CreateBatch from './pages/CreateBatch';
@@ -28,6 +28,8 @@ import EditBatch from './pages/EditBatch';
 import ErrorBoundary from './components/ErrorBoundary';
 import UpdateStudentUniformsPage from './pages/UpdateStudentUniformsPage';
 import ManageStudentUniforms from './pages/ManageStudentUniforms';
+import LogUniform from './pages/LogUniform';
+import DeficitReportPage from './pages/DeficitReportPage';
 
 function Routes() {
   const { setUser } = useAuthStore();
@@ -70,6 +72,7 @@ function Routes() {
         <Route path="schools" element={<Outlet />}>
           <Route index element={<NewSchools />} />
           <Route path=":id" element={<NewSchoolDetails />} />
+          <Route path=":schoolId/students/:studentId" element={<StudentDetailsPage />} />
           <Route path=":schoolId/students/:studentId/details" element={<StudentDetailsPage />} />
           <Route path=":schoolId/students/:studentId/manage-uniforms" element={<ManageStudentUniforms />} />
         </Route>
@@ -82,7 +85,7 @@ function Routes() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="orders/*" element={<Orders />} />
         <Route path="reports/*" element={<Reports />} />
-        <Route path="user-management" element={<UserManagement />} />
+        <Route path="admin/super-admin" element={<AdminSuperAdmin />} />
       </Route>
     </RouterRoutes>
   );

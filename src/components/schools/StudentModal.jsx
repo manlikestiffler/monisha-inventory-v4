@@ -1,137 +1,82 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Phone, School, ChevronRight, ChevronLeft, AlertCircle } from 'lucide-react';
+import { X, User, School, GraduationCap } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-const LEVEL_CATEGORIES = {
-  JUNIOR: 'JUNIOR',
-  SENIOR: 'SENIOR'
-};
-
-const GENDER_OPTIONS = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' }
-];
-
-const StudentModal = ({ isOpen, onClose, school, initialData, onSave, availableUniforms = [] }) => {
-  const [step, setStep] = useState(1); // Step 1: Student Info, Step 2: Uniform Selection
+const StudentModal = ({ isOpen, onClose, school, initialData, onSave }) => {
   const [loading, setLoading] = useState(false);
   const [studentData, setStudentData] = useState({
     name: '',
-    level: LEVEL_CATEGORIES.JUNIOR,
-    gender: 'MALE',
-    guardianPhone: '',
-    uniformStatus: {},
-    uniformQuantities: {},
-    uniformSizes: {},
-    ...initialData
+    form: '',
+    level: 'Junior',
+    gender: 'Boys'
   });
 
   useEffect(() => {
-    if (!isOpen) {
-      setStep(1);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
     if (initialData) {
-      setStudentData(initialData);
-    } else {
-      // Initialize uniform status and quantities for new students
-      const initialUniformStatus = {};
-      const initialUniformQuantities = {};
-      if (school?.uniformRequirements?.[studentData.level]) {
-        Object.entries(school.uniformRequirements[studentData.level]).forEach(([category, items]) => {
-          items.forEach((item, index) => {
-            const key = `${category}-${index}`;
-            initialUniformStatus[key] = 'pending';
-            initialUniformQuantities[key] = item?.quantityPerStudent || 1;
-          });
-        });
-      }
-      setStudentData(prev => ({
-        ...prev,
-        uniformStatus: initialUniformStatus,
-        uniformQuantities: initialUniformQuantities
-      }));
+      setStudentData({
+        name: initialData.name || '',
+        form: initialData.form || '',
+        level: initialData.level || 'Junior',
+        gender: initialData.gender || 'Boys'
+      });
+    } else if (!isOpen) {
+      setStudentData({
+        name: '',
+        form: '',
+        level: 'Junior',
+        gender: 'Boys'
+      });
     }
-  }, [initialData, school, studentData.level]);
-
-  useEffect(() => {
-    // Debug logs
-    console.log('School data:', school);
-    console.log('Uniform requirements:', school?.uniformRequirements);
-    console.log('Current level:', studentData.level);
-    console.log('Current gender:', studentData.gender);
-    console.log('Available uniforms:', availableUniforms);
-    if (school?.uniformRequirements) {
-      console.log('Uniforms for current level:', school.uniformRequirements[studentData.level]);
-      const category = studentData.gender === 'MALE' ? 'BOYS' : 'GIRLS';
-      console.log('Trying to access uniforms with:', category);
-      console.log('Available uniforms for category:', school.uniformRequirements[studentData.level]?.[category]);
-    }
-  }, [school, studentData.level, studentData.gender, availableUniforms]);
+  }, [initialData, isOpen]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setStudentData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleUniformStatusChange = (category, index, status) => {
-    setStudentData(prev => ({
-      ...prev,
-      uniformStatus: {
-        ...prev.uniformStatus,
-        [`${category}-${index}`]: status
-      }
-    }));
-  };
-
-  const handleQuantityChange = (category, index, change) => {
-    const key = `${category}-${index}`;
-    const currentQuantity = studentData.uniformQuantities[key] || 1;
-    const newQuantity = Math.max(1, currentQuantity + change);
-    
-    setStudentData(prev => ({
-      ...prev,
-      uniformQuantities: {
-        ...prev.uniformQuantities,
-        [key]: newQuantity
-      }
-    }));
-  };
-
-  const handleSizeChange = (category, index, size) => {
-    setStudentData(prev => ({
-      ...prev,
-      uniformSizes: {
-        ...prev.uniformSizes,
-        [`${category}-${index}`]: size
-      }
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // If we're editing (initialData exists), or we're on step 2, save the data
-    if (initialData || step === 2) {
-      try {
-        setLoading(true);
-        await onSave(studentData);
-        onClose();
-      } catch (error) {
-        console.error('Error saving student:', error);
-      } finally {
-        setLoading(false);
-      }
+    // Validation
+    if (!studentData.name.trim()) {
+      toast.error('Please enter the student name');
       return;
     }
 
-    // If we're on step 1 and adding a new student, proceed to step 2
-    if (!studentData.name || !studentData.gender || !studentData.level || !studentData.guardianPhone) {
+    if (!studentData.form.trim()) {
+      toast.error('Please enter the student form');
       return;
     }
-    setStep(2);
+
+    try {
+      setLoading(true);
+      
+      const studentToSave = {
+        ...studentData,
+        name: studentData.name.trim(),
+        form: studentData.form.trim()
+      };
+      
+      // If adding new student, include timestamps and schoolId
+      if (!initialData) {
+        studentToSave.schoolId = school.id;
+        studentToSave.uniformLog = [];
+        studentToSave.createdAt = new Date().toISOString();
+        studentToSave.updatedAt = new Date().toISOString();
+      } else {
+        studentToSave.updatedAt = new Date().toISOString();
+      }
+      
+      await onSave(studentToSave);
+      toast.success(`${studentData.name} has been ${initialData ? 'updated' : 'added'} successfully`);
+      onClose();
+    } catch (error) {
+      console.error('Error saving student:', error);
+      toast.error(error.message || 'Failed to save student. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const modalVariants = {
@@ -152,24 +97,6 @@ const StudentModal = ({ isOpen, onClose, school, initialData, onSave, availableU
     }
   };
 
-  const contentVariants = {
-    hidden: { x: 20, opacity: 0 },
-    visible: { 
-      x: 0, 
-      opacity: 1,
-      transition: { 
-        type: 'spring',
-        stiffness: 500,
-        damping: 30
-      }
-    },
-    exit: {
-      x: -20,
-      opacity: 0,
-      transition: { duration: 0.2 }
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -180,197 +107,168 @@ const StudentModal = ({ isOpen, onClose, school, initialData, onSave, availableU
           animate="visible"
           exit="exit"
           variants={modalVariants}
-          className="bg-gray-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-800 overflow-hidden"
+          className="bg-white dark:bg-gray-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           <form onSubmit={handleSubmit}>
-            {/* Progress Bar */}
-            <div className="w-full bg-gray-800 h-1">
-              {!initialData && (
-                <div 
-                  className="h-full bg-red-500 transition-all duration-300"
-                  style={{ width: step === 1 ? '50%' : '100%' }}
-                />
-              )}
-            </div>
-
             {/* Header */}
-            <div className="flex items-center justify-between p-6 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-800">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-100">
-                  {initialData ? 'Edit Student' : (step === 1 ? 'Student Information' : 'Uniform Selection')}
-                </h2>
-                {!initialData && (
-                  <p className="text-sm text-gray-400 mt-1">
-                    Step {step} of 2
+            <div className="flex items-center justify-between p-6 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-lg">
+                  <User className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {initialData ? 'Edit Student' : 'Add New Student'}
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {initialData ? 'Update student information' : `Add to ${school?.name}`}
                   </p>
-                )}
+                </div>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-full hover:bg-gray-800 text-gray-400 hover:text-gray-300 transition-colors"
+                disabled={loading}
+                className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Form Content */}
-            <div className="p-6 space-y-6">
-              <AnimatePresence mode="wait">
-                {(step === 1) ? (
-                  <motion.div
-                    key="step1"
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    variants={contentVariants}
-                    className="space-y-6"
-                  >
-                    {/* Student Information Form */}
-                    <div className="space-y-6">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                          <User size={16} className="text-red-400" />
-                          Full Name
-                        </label>
-                        <input
-                          type="text"
-                          name="name"
-                          value={studentData.name}
-                          onChange={handleChange}
-                          className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                          placeholder="Enter student's full name"
-                          required
-                        />
-                      </div>
+            <div className="p-6 max-h-[calc(100vh-250px)] overflow-y-auto space-y-6">
+              {/* Student Name */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <User size={16} />
+                  Student Name *
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={studentData.name}
+                  onChange={handleChange}
+                  placeholder="Enter full name"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                  disabled={loading}
+                  required
+                />
+              </div>
 
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                            <School size={16} className="text-red-400" />
-                            Level
-                          </label>
-                          <select
-                            name="level"
-                            value={studentData.level}
-                            onChange={handleChange}
-                            className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-100"
-                          >
-                            <option value="JUNIOR">Junior</option>
-                            <option value="SENIOR">Senior</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                            <User size={16} className="text-red-400" />
-                            Gender
-                          </label>
-                          <select
-                            name="gender"
-                            value={studentData.gender}
-                            onChange={handleChange}
-                            className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-100"
-                          >
-                            {GENDER_OPTIONS.map(option => (
-                              <option key={option.value} value={option.value}>{option.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
+              {/* Form */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <GraduationCap size={16} />
+                  Form *
+                </label>
+                <input
+                  type="text"
+                  name="form"
+                  value={studentData.form}
+                  onChange={handleChange}
+                  placeholder="Enter form (e.g., 1A, 2B, 3C, 4A, 5B, 6C)"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                  disabled={loading}
+                  required
+                />
+              </div>
 
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                          <Phone size={16} className="text-red-400" />
-                          Guardian's Phone
-                        </label>
-                        <input
-                          type="tel"
-                          name="guardianPhone"
-                          value={studentData.guardianPhone}
-                          onChange={handleChange}
-                          className="w-full p-3 rounded-xl bg-gray-800/50 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                          placeholder="Enter guardian's phone number"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="step2"
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    variants={contentVariants}
-                    className="space-y-6"
-                  >
-                    {/* Uniform Selection */}
-                    <div className="space-y-4">
-                      {Object.entries(school.uniformRequirements?.[studentData.level] || {}).map(([category, items]) => {
-                        if (category !== (studentData.gender === 'MALE' ? 'BOYS' : 'GIRLS')) return null;
-                        
-                        return (
-                          <div key={category} className="space-y-3">
-                            <h3 className="text-lg font-semibold text-gray-200 border-b border-gray-700 pb-2">{category}</h3>
-                            {items.map((item, index) => {
-                              const uniformDetails = availableUniforms.find(u => u.id === item.uniformId);
-                              return (
-                                <div key={index} className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-                                  <h4 className="font-semibold text-gray-200">{uniformDetails?.name || 'Loading...'}</h4>
-                                  <p className="text-sm text-gray-400 mt-1">{uniformDetails?.description}</p>
-                                  
-                                  <div className="mt-4 grid grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="text-xs text-gray-500">Quantity</label>
-                                      <p className="text-gray-200 font-medium">{item.quantityPerStudent}</p>
-                                    </div>
-                                    <div>
-                                      <label className="text-xs text-gray-500">Size</label>
-                                      <select
-                                        value={studentData.uniformSizes?.[`${category}-${index}`] || ''}
-                                        onChange={(e) => handleSizeChange(category, index, e.target.value)}
-                                        className="w-full mt-1 p-2 rounded-md bg-gray-800 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-red-500 text-gray-200"
-                                        required
-                                      >
-                                        <option value="" disabled>Select size</option>
-                                        {uniformDetails?.availableSizes?.map(size => (
-                                          <option key={size} value={size}>{size}</option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Level Selector */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <School size={16} />
+                  Level *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {['Junior', 'Senior'].map(level => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setStudentData(prev => ({ ...prev, level }))}
+                      disabled={loading}
+                      className={`px-4 py-3 rounded-xl font-medium transition-all ${
+                        studentData.level === level
+                          ? 'bg-red-600 text-white shadow-lg shadow-red-600/30 ring-2 ring-red-600 ring-offset-2 dark:ring-offset-gray-900'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-700'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Gender Selector */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <User size={16} />
+                  Gender *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {['Boys', 'Girls'].map(gender => (
+                    <button
+                      key={gender}
+                      type="button"
+                      onClick={() => setStudentData(prev => ({ ...prev, gender }))}
+                      disabled={loading}
+                      className={`px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-center space-x-2 ${
+                        studentData.gender === gender
+                          ? gender === 'Boys'
+                            ? 'bg-red-600 text-white shadow-lg shadow-red-600/30 ring-2 ring-red-600 ring-offset-2 dark:ring-offset-gray-900'
+                            : 'bg-pink-600 text-white shadow-lg shadow-pink-600/30 ring-2 ring-pink-600 ring-offset-2 dark:ring-offset-gray-900'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-700'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      <span>{gender === 'Boys' ? '👦' : '👧'}</span>
+                      <span>{gender}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-2 flex items-center gap-2">
+                  <School size={14} />
+                  Summary
+                </h3>
+                <div className="space-y-1 text-sm text-blue-800 dark:text-blue-400">
+                  <p>• <span className="font-semibold">{studentData.name || 'Student Name'}</span> - Form {studentData.form || 'N/A'}</p>
+                  <p>• {studentData.level} Level • {studentData.gender}</p>
+                  <p className="text-xs mt-2 text-blue-700 dark:text-blue-500">
+                    {initialData ? 'Will update student information' : `Will be enrolled at ${school?.name}`}
+                  </p>
+                </div>
+              </div>
             </div>
 
-            {/* Footer with Navigation */}
-            <div className="flex items-center justify-between p-6 bg-gray-800/50">
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
               <button
                 type="button"
-                onClick={() => setStep(1)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors
-                  ${step === 1 ? 'text-gray-600 cursor-not-allowed' : 'text-gray-300 hover:bg-gray-700'}`}
-                disabled={step === 1}
+                onClick={onClose}
+                disabled={loading}
+                className="px-6 py-3 rounded-xl font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ChevronLeft size={16} />
-                Back
+                Cancel
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors bg-red-600 text-white hover:bg-red-700"
                 disabled={loading}
+                className="px-6 py-3 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 shadow-lg shadow-red-600/30"
               >
-                {loading ? 'Saving...' : (step === 1 ? 'Next' : 'Save Student')}
-                <ChevronRight size={16} />
+                {loading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>{initialData ? 'Updating...' : 'Adding Student...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <User size={16} />
+                    <span>{initialData ? 'Update Student' : 'Add Student'}</span>
+                  </>
+                )}
               </button>
             </div>
           </form>
@@ -380,4 +278,4 @@ const StudentModal = ({ isOpen, onClose, school, initialData, onSave, availableU
   );
 };
 
-export default StudentModal; 
+export default StudentModal;

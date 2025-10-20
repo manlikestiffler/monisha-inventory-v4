@@ -5,6 +5,7 @@ import { useUniformStore } from '../stores/uniformStore';
 import toast from 'react-hot-toast';
 import { FiArrowLeft, FiSave, FiPlus, FiTrash2 } from 'react-icons/fi';
 import UniformDistributionTable from '../components/students/UniformDistributionTable';
+import UniformRequirementsDisplay from '../components/students/UniformRequirementsDisplay';
 
 const ManageStudentUniforms = () => {
   const { schoolId, studentId } = useParams();
@@ -32,7 +33,9 @@ const ManageStudentUniforms = () => {
         const schoolData = await getSchoolById(schoolId);
         if (!schoolData) throw new Error("School not found");
         
-        const studentData = schoolData.students?.find(s => s.id === studentId);
+        // Get student data from students collection (like mobile app) instead of school.students
+        const { getStudentById } = useSchoolStore.getState();
+        const studentData = await getStudentById(studentId);
         if (!studentData) throw new Error("Student not found");
 
         setSchool(schoolData);
@@ -48,10 +51,18 @@ const ManageStudentUniforms = () => {
         }
         setAvailableUniforms(allUniforms);
 
-        // Determine student's uniform requirements
-        const level = studentData.level || 'JUNIOR';
-        const gender = studentData.gender === 'MALE' ? 'BOYS' : 'GIRLS';
-        const requirements = schoolData.uniformRequirements?.[level]?.[gender] || [];
+        // Use the same method as mobile app to get uniform policies
+        const { getSchoolUniformPolicies } = useSchoolStore.getState();
+        const requirements = await getSchoolUniformPolicies(schoolId, studentData.level, studentData.gender);
+        
+        console.log('DEBUG - Student data:', {
+          name: studentData.name,
+          level: studentData.level,
+          gender: studentData.gender,
+          uniformLog: studentData.uniformLog
+        });
+        
+        console.log('DEBUG - Fetched requirements:', requirements);
         setUniformRequirements(requirements);
 
       } catch (err) {
@@ -93,24 +104,24 @@ const ManageStudentUniforms = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
-        <div>Loading student uniform data...</div>
+      <div className="flex items-center justify-center h-screen bg-white">
+        <div className="text-gray-700">Loading student uniform data...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-white p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
-            <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-400 hover:text-white mb-2">
+            <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4">
               <FiArrowLeft />
               Back
             </button>
-            <h1 className="text-3xl font-bold">Manage Uniforms</h1>
-            {student && <p className="text-gray-400">For {student.name}</p>}
+            <h1 className="text-3xl font-bold text-gray-900">Manage Uniforms</h1>
+            {student && <p className="text-gray-600">For {student.name}</p>}
           </div>
           <div className="flex items-center gap-4">
             <button
@@ -124,14 +135,16 @@ const ManageStudentUniforms = () => {
           </div>
         </div>
         
-        {/* We will replace this with the actual table */}
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
-           <UniformDistributionTable 
-            requirements={uniformRequirements}
-            studentData={student}
-            availableUniforms={availableUniforms}
-            initialDistribution={uniformDistribution}
-            onDistributionChange={handleDistributionChange}
+        {/* Uniform Requirements Display - Similar to Mobile App */}
+        <div>
+           <UniformRequirementsDisplay 
+            student={student}
+            school={school}
+            uniformRequirements={uniformRequirements}
+            onRefresh={() => {
+              // Refresh data after logging uniform
+              window.location.reload();
+            }}
            />
         </div>
       </div>

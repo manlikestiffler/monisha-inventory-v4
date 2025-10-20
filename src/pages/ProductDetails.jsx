@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, query, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, query, collection, getDocs, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { motion } from 'framer-motion';
 import { 
@@ -17,11 +17,13 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
-  Edit2
+  Edit2,
+  RefreshCw
 } from 'lucide-react';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Badge from '../components/ui/Badge';
 import { useAuthStore } from '../stores/authStore';
+import ReorderModal from '../components/inventory/ReorderModal';
 
 const getDefaultProductImage = (name, type) => {
   const bgColors = {
@@ -61,6 +63,9 @@ const ProductDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [schoolName, setSchoolName] = useState('');
+  const [variantsWithStock, setVariantsWithStock] = useState([]);
+  const [reorderModalOpen, setReorderModalOpen] = useState(false);
+  const [selectedReorder, setSelectedReorder] = useState(null);
   const { isManager } = useAuthStore();
 
   useEffect(() => {
@@ -87,16 +92,27 @@ const ProductDetails = () => {
             }
           }
 
-          // Process variants directly from the uniform document
+          // Fetch actual variant data from uniform_variants collection for stock levels
+          const variantsQuery = query(
+            collection(db, 'uniform_variants'),
+            where('uniformId', '==', id)
+          );
+          const variantsSnapshot = await getDocs(variantsQuery);
+          
           let variants = [];
-          if (data.variants && Array.isArray(data.variants)) {
-            variants = data.variants.map(variant => ({
-              id: `${variant.variantType}-${variant.color}`,
-              variantType: variant.variantType,
-              color: variant.color,
-              sizes: variant.sizes || []
-            }));
-          }
+          variantsSnapshot.forEach(doc => {
+            const variantData = doc.data();
+            variants.push({
+              id: doc.id,
+              variantType: variantData.variantType,
+              color: variantData.color,
+              sizes: variantData.sizes || [],
+              batchId: variantData.batchId,
+              defaultReorderLevel: variantData.defaultReorderLevel || 5
+            });
+          });
+          
+          setVariantsWithStock(variants);
           
           const productData = { 
             id: docSnap.id, 
@@ -329,21 +345,77 @@ const ProductDetails = () => {
                           </div>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                          {variant.sizes.map((size) => (
-                            <motion.div
-                              key={size.size}
-                              whileHover={{ scale: 1.05 }}
-                              className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
-                            >
-                              <div className="text-center">
-                                <span className="text-lg font-semibold text-gray-900">Size {size.size}</span>
-                                <div className="mt-2 text-2xl font-bold text-red-600">
-                                  {size.quantity}
+                          {variant.sizes.map((size) => {
+                            const quantity = size.quantity || 0;
+                            const reorderLevel = size.reorderLevel || variant.defaultReorderLevel || 5;
+                            const isLowStock = quantity <= reorderLevel && quantity > 0;
+                            const isOutOfStock = quantity === 0;
+                            
+                            return (
+                              <motion.div
+                                key={size.size}
+                                whileHover={{ scale: 1.05 }}
+                                className={`bg-white rounded-lg shadow-sm border-2 p-4 relative ${
+                                  isOutOfStock ? 'border-red-300 bg-red-50/50' :
+                                  isLowStock ? 'border-yellow-300 bg-yellow-50/50' :
+                                  'border-gray-200'
+                                }`}
+                              >
+                                {/* Stock Status Badge */}
+                                {(isLowStock || isOutOfStock) && (
+                                  <div className="absolute -top-2 -right-2">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      isOutOfStock ? 'bg-red-600 text-white' :
+                                      'bg-yellow-500 text-white'
+                                    }`}>
+                                      {isOutOfStock ? 'OUT' : 'LOW'}
+                                    </span>
+                                  </div>
+                                )}
+                                
+                                <div className="text-center">
+                                  <span className="text-lg font-semibold text-gray-900">Size {size.size}</span>
+                                  <div className={`mt-2 text-2xl font-bold ${
+                                    isOutOfStock ? 'text-red-600' :
+                                    isLowStock ? 'text-yellow-600' :
+                                    'text-green-600'
+                                  }`}>
+                                    {quantity}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">pieces</div>
+                                  
+                                  {/* Reorder Level Info */}
+                                  <div className="text-xs text-gray-400 mt-1">
+                                    Reorder at: {reorderLevel}
+                                  </div>
+                                  
+                                  {/* Reorder Button */}
+                                  {(isLowStock || isOutOfStock) && (
+                                    <button
+                                      onClick={() => {
+                                        setSelectedReorder({
+                                          variant,
+                                          size: size.size,
+                                          currentStock: quantity,
+                                          reorderLevel,
+                                          batchId: variant.batchId
+                                        });
+                                        setReorderModalOpen(true);
+                                      }}
+                                      className={`mt-3 w-full flex items-center justify-center space-x-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                        isOutOfStock 
+                                          ? 'bg-red-600 hover:bg-red-700 text-white' 
+                                          : 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                                      }`}
+                                    >
+                                      <RefreshCw className="w-3 h-3" />
+                                      <span>Reorder</span>
+                                    </button>
+                                  )}
                                 </div>
-                                <div className="text-xs text-gray-500 mt-1">pieces</div>
-                              </div>
-                            </motion.div>
-                          ))}
+                              </motion.div>
+                            );
+                          })}
                         </div>
                       </motion.div>
                     ))}
@@ -354,6 +426,22 @@ const ProductDetails = () => {
           </div>
         </motion.div>
       </div>
+      
+      {/* Reorder Modal */}
+      {selectedReorder && (
+        <ReorderModal
+          isOpen={reorderModalOpen}
+          onClose={() => {
+            setReorderModalOpen(false);
+            setSelectedReorder(null);
+          }}
+          variant={selectedReorder.variant}
+          size={selectedReorder.size}
+          currentStock={selectedReorder.currentStock}
+          reorderLevel={selectedReorder.reorderLevel}
+          batchId={selectedReorder.batchId}
+        />
+      )}
     </div>
   );
 };

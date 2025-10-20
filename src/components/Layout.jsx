@@ -16,7 +16,7 @@ import {
   NotificationIcon,
   MenuIcon
 } from './icons';
-import { FiUsers, FiUser, FiSettings, FiLogOut, FiTrash2, FiShield, FiChevronDown, FiSun, FiMoon } from 'react-icons/fi';
+import { FiUsers, FiUser, FiSettings, FiLogOut, FiTrash2, FiShield, FiChevronDown, FiSun, FiMoon, FiAlertTriangle } from 'react-icons/fi';
 
 const Layout = ({ children }) => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -26,6 +26,9 @@ const Layout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isManager, userProfile, userRole, deleteAccount, isSuperAdmin } = useAuthStore();
+  
+  // Check if current user is super user
+  const isSuperUser = user?.email === 'tinashegomo96@gmail.com';
   const { theme, setTheme } = useTheme();
 
   const toggleTheme = () => {
@@ -239,13 +242,21 @@ const Layout = ({ children }) => {
                             </p>
                           </div>
                         </div>
-                        <div className={`inline-flex items-center mt-3 px-2.5 py-1 rounded-md text-xs font-medium ${
-                            userRole === 'manager' 
-                              ? 'bg-red-500/10 text-red-400' 
-                              : 'bg-secondary text-muted-foreground'
-                          }`}>
-                          <FiShield className="inline-block mr-1.5 h-3 w-3" />
-                          <span>{userRole === 'manager' ? 'Manager' : 'Staff'}</span>
+                        <div className="flex gap-2 mt-3">
+                          <div className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${
+                              userRole === 'manager' 
+                                ? 'bg-red-500/10 text-red-400' 
+                                : 'bg-secondary text-muted-foreground'
+                            }`}>
+                            <FiShield className="inline-block mr-1.5 h-3 w-3" />
+                            <span>{userRole === 'manager' ? 'Manager' : 'Staff'}</span>
+                          </div>
+                          {isSuperUser && (
+                            <div className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-500/10 text-yellow-400">
+                              <FiShield className="inline-block mr-1.5 h-3 w-3" />
+                              <span>Super User</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       
@@ -263,10 +274,10 @@ const Layout = ({ children }) => {
                           <FiUser className="h-4 w-4 mr-3 text-muted-foreground" />
                           <span className="text-foreground">View Profile</span>
                         </DropdownMenuItem>
-                        {isManager() && (
-                          <DropdownMenuItem onSelect={() => { navigate('/users'); setIsProfileOpen(false); }}>
-                            <FiUsers className="h-4 w-4 mr-3 text-muted-foreground" />
-                            <span className="text-foreground">User Management</span>
+                        {isSuperUser && (
+                          <DropdownMenuItem onSelect={() => { navigate('/admin/super-admin'); setIsProfileOpen(false); }}>
+                            <FiShield className="h-4 w-4 mr-3 text-yellow-400" />
+                            <span className="text-foreground">Super Admin Dashboard</span>
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onSelect={() => { navigate('/settings'); setIsProfileOpen(false); }}>

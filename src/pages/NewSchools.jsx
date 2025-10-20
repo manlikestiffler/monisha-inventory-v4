@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { FiFilter, FiGrid, FiList, FiPlus, FiSearch } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useSchoolStore } from '../stores/schoolStore';
+import AddSchoolModal from '../components/schools/AddSchoolModal';
 import Button from '../components/ui/Button';
-import { FiPlus, FiSearch, FiSliders, FiGrid, FiList, FiFilter } from 'react-icons/fi';
-import SchoolModal from '../components/schools/SchoolModal';
 import LoadingScreen from '../components/ui/LoadingScreen';
+import { useSchoolStore } from '../stores/schoolStore';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -30,7 +30,7 @@ const itemVariants = {
 };
 
 const NewSchools = () => {
-  const { schools, fetchSchools, addSchool, deleteSchool } = useSchoolStore();
+  const { schools, fetchSchools, addSchool, deleteSchool, getTotalStudentCount, getStudentCountForSchool } = useSchoolStore();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -40,12 +40,15 @@ const NewSchools = () => {
     showInactive: true,
   });
   const [viewMode, setViewMode] = useState('grid');
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [schoolStudentCounts, setSchoolStudentCounts] = useState({});
 
   useEffect(() => {
     const loadSchools = async () => {
       try {
         setLoading(true);
         await fetchSchools();
+        await loadStudentCounts();
       } catch (err) {
         console.error('Error fetching schools:', err);
         setError(err.message);
@@ -57,15 +60,30 @@ const NewSchools = () => {
     loadSchools();
   }, [fetchSchools]);
 
-  const handleAddSchool = async (schoolData) => {
+  const loadStudentCounts = async () => {
     try {
-      await addSchool(schoolData);
-      setShowAddModal(false);
+      // Get total student count
+      const total = await getTotalStudentCount();
+      setTotalStudents(total);
+
+      // Get student count for each school
+      const counts = {};
+      for (const school of schools) {
+        counts[school.id] = await getStudentCountForSchool(school.id);
+      }
+      setSchoolStudentCounts(counts);
     } catch (error) {
-      console.error('Error adding school:', error);
-      throw error;
+      console.error('Error loading student counts:', error);
     }
   };
+
+  // Reload student counts when schools change
+  useEffect(() => {
+    if (schools.length > 0) {
+      loadStudentCounts();
+    }
+  }, [schools]);
+
 
   const handleDeleteSchool = async (id) => {
     if (window.confirm('Are you sure you want to delete this school?')) {
@@ -206,6 +224,7 @@ const NewSchools = () => {
                     </label>
                   </div>
                 </div>
+                
                 <button
                   className="w-full text-xs text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 font-medium"
                   onClick={() => {
@@ -278,7 +297,7 @@ const NewSchools = () => {
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
                       <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">Students</p>
-                      <p className="font-medium text-gray-800 dark:text-gray-200">{school.students?.length || 0}</p>
+                      <p className="font-medium text-gray-800 dark:text-gray-200">{schoolStudentCounts[school.id] || 0}</p>
                     </div>
                   </div>
 
@@ -342,10 +361,9 @@ const NewSchools = () => {
       </AnimatePresence>
 
       {/* Add School Modal */}
-      <SchoolModal
+      <AddSchoolModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onSubmit={handleAddSchool}
       />
     </div>
   );

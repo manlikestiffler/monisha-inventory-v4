@@ -1,13 +1,407 @@
-# Monisha Inventory - Management Platform
+# Monisha Inventory Management - Web Application
 
-This is a modern, full-stack inventory management platform for Monisha Uniforms, designed to provide a seamless and efficient way to manage school uniforms, batches, and stock levels. The application is built with a React-based frontend and leverages Firebase for backend services, including authentication, database, and storage.
+A comprehensive React-based web application for managing school uniform inventory, built with modern technologies and Firebase backend integration.
 
-## Key Features
+## 🏗️ System Architecture
 
-- **Secure Authentication:** Robust user registration and login with email verification and role-based access control.
-- **Dashboard Analytics:** An interactive dashboard providing at-a-glance insights into inventory levels, recent orders, and sales trends.
-- **Inventory Management:** A comprehensive system for adding, editing, and tracking uniform products with detailed information, including variants, sizes, and images.
-- **Batch Tracking:** Create and manage inventory batches, allowing for efficient stock control and supplier management.
+### Technology Stack
+- **Frontend:** React 18 with Vite
+- **State Management:** Zustand
+- **Styling:** Tailwind CSS + Shadcn/ui components
+- **Backend:** Firebase (Firestore, Authentication)
+- **Routing:** React Router v6
+- **Charts:** Recharts
+- **Animations:** Framer Motion
+
+### Project Structure
+```
+web/
+├── src/
+│   ├── components/          # Reusable UI components
+│   │   ├── ui/             # Base UI components (Button, Input, Modal, etc.)
+│   │   ├── dashboard/      # Dashboard-specific components
+│   │   ├── schools/        # School management components
+│   │   ├── inventory/      # Inventory management components
+│   │   └── reports/        # Reporting components
+│   ├── pages/              # Route components
+│   ├── stores/             # Zustand state management
+│   ├── config/             # Configuration files
+│   ├── hooks/              # Custom React hooks
+│   └── utils/              # Utility functions
+├── public/                 # Static assets
+└── dist/                   # Build output
+```
+
+## 🔄 Data Flow Architecture
+
+### Store Pattern
+The application uses Zustand for state management with the following stores:
+
+#### 1. School Store (`stores/schoolStore.js`)
+```javascript
+// Manages schools and students
+- fetchSchools() → Firebase schools collection
+- addSchool() → Creates new school document
+- updateSchool() → Updates school data
+- addUniformPolicy() → Manages school uniform requirements
+- getTotalStudentCount() → Aggregates student data
+```
+
+#### 2. Inventory Store (`stores/inventoryStore.js`)
+```javascript
+// Manages products and batches
+- fetchUniforms() → Firebase uniforms collection
+- fetchUniformVariants() → Firebase uniform_variants collection
+- fetchBatches() → Firebase batchInventory collection
+- deductProductInventory() → Handles stock allocation
+- reorderFromBatch() → Manages inventory replenishment
+```
+
+#### 3. Order Store (`stores/orderStore.js`)
+```javascript
+// Manages order processing
+- fetchOrders() → Firebase orders collection
+- createOrder() → Creates new order documents
+- updateOrderStatus() → Manages order lifecycle
+```
+
+### Data Synchronization Pattern
+```
+UI Component → Zustand Store → Firebase SDK → Firestore
+     ↓              ↓              ↓           ↓
+User Action → State Update → API Call → Database Write
+     ↓              ↓              ↓           ↓
+Re-render ← State Sync ← Response ← Server Response
+```
+
+## 🎯 Key Features & Implementation
+
+### 1. Dashboard Analytics
+- **Real-time metrics:** Total inventory, active schools, revenue tracking
+- **Interactive charts:** Revenue trends, size demand patterns, school performance
+- **Recent activity:** Live updates of orders, batches, and school activities
+- **Implementation:** Recharts with data aggregation from multiple Firebase collections
+
+### 2. School Management
+- **School creation:** Simplified modal with name-only input
+- **Student management:** Comprehensive student profiles with uniform tracking
+- **Uniform policies:** Configurable requirements per school level and gender
+- **Deficit reporting:** Automated analysis of uniform shortfalls
+
+### 3. Inventory Management
+- **Batch-first approach:** Create batches → Generate products → Allocate to students
+- **Multi-variant support:** Colors, sizes, and pricing per uniform type
+- **Stock tracking:** Real-time inventory levels with reorder alerts
+- **Audit trails:** Complete history of all inventory movements
+
+### 4. Advanced Features
+- **Cross-platform sync:** Real-time data sharing with mobile app
+- **Role-based access:** Manager and staff permission levels
+- **Responsive design:** Mobile-friendly interface
+- **Dark mode support:** Theme switching capability
+
+## 🔧 Technical Challenges & Solutions
+
+### Challenge 1: Cross-Platform Data Consistency
+**Problem:** Ensuring data created on web appears immediately on mobile and vice versa.
+
+**Solution:**
+- Server-first data fetching: `getDoc(docRef, { source: 'server' })`
+- Optimistic UI updates with local state synchronization
+- Consistent data structures across platforms
+- Real-time listeners for critical collections
+
+### Challenge 2: Complex Inventory Flow
+**Problem:** Managing batch → product → student allocation with proper stock tracking.
+
+**Solution:**
+```javascript
+// Implemented sophisticated inventory deduction system
+1. Batch Creation → batchInventory collection
+2. Product Creation → uniforms + uniform_variants (deducts from batch)
+3. Student Allocation → students.uniformLog (deducts from product)
+4. Reorder System → replenish products from batches
+```
+
+### Challenge 3: Uniform Policy Synchronization
+**Problem:** Uniform policies created on one platform not appearing on the other.
+
+**Solution:**
+- Unified data structure with consistent field names
+- Server-fetch enforcement for policy-related queries
+- Standardized validation rules across platforms
+
+### Challenge 4: Performance with Large Datasets
+**Problem:** Slow loading with multiple schools and thousands of students.
+
+**Solution:**
+- Pagination for large lists
+- Lazy loading of non-critical data
+- Efficient Firebase queries with proper indexing
+- Local caching with Zustand persistence
+
+### Challenge 5: State Management Complexity
+**Problem:** Managing complex nested data relationships.
+
+**Solution:**
+- Zustand stores with computed values
+- Normalized data structures
+- Efficient re-render patterns with selective subscriptions
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+- Firebase project with Firestore enabled
+
+### Installation
+```bash
+cd web
+npm install
+```
+
+### Environment Setup
+Create `.env` file:
+```env
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+```
+
+### Development
+```bash
+npm run dev
+```
+
+### Build
+```bash
+npm run build
+```
+
+## 📊 Data Flow Patterns
+
+### 1. School → Student Relationship
+```
+School Creation → Student Addition → Uniform Allocation → Deficit Analysis
+     ↓                 ↓                  ↓                 ↓
+schools collection → students collection → uniformLog array → Reports
+```
+
+### 2. Inventory Flow
+```
+Batch → Product Variants → Student Allocation → Reorder
+  ↓          ↓                  ↓              ↓
+batchInventory → uniform_variants → allocation → reorderHistory
+```
+
+### 3. Order Processing
+```
+School Selection → Item Selection → Order Creation → Status Updates
+      ↓               ↓               ↓              ↓
+schools data → uniform_variants → orders collection → status tracking
+```
+
+## 🔐 Security Implementation
+
+### Authentication
+- Firebase Authentication with email/password
+- Role-based access control (manager/staff)
+- Protected routes with authentication guards
+
+### Data Security
+- Firestore security rules for collection access
+- Input validation and sanitization
+- Audit trails for all critical operations
+
+## 📈 Performance Optimizations
+
+### Frontend Optimizations
+- React.memo for expensive components
+- useMemo for computed values
+- Lazy loading of route components
+- Efficient re-render patterns
+
+### Backend Optimizations
+- Composite indexes for complex queries
+- Batch operations for multiple writes
+- Pagination for large datasets
+- Caching strategies with Zustand
+
+## 🧪 Testing Strategy
+
+### Unit Testing
+- Component testing with React Testing Library
+- Store testing with Zustand test utilities
+- Utility function testing
+
+### Integration Testing
+- Firebase integration tests
+- Cross-store communication tests
+- API endpoint testing
+
+## 🚀 Deployment
+
+### Build Process
+```bash
+npm run build
+```
+
+### Deployment Options
+- Netlify (recommended)
+- Vercel
+- Firebase Hosting
+- Traditional web servers
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- Real-time notifications
+- Advanced reporting dashboard
+- Bulk operations interface
+- Export/import functionality
+- Multi-language support
+
+### Technical Improvements
+- Service worker for offline support
+- Progressive Web App features
+- Advanced caching strategies
+- Performance monitoring
+
+## 📋 Page-by-Page Purpose Guide
+
+### What Each Page Does and Why You Need It
+
+#### 🏠 Dashboard (`/dashboard`)
+**What It Does:** Your command center - shows you the big picture of your business at a glance.
+
+**Why You Need It:**
+- See total inventory value and how much stock you have
+- Track which schools are your best customers
+- Monitor recent activity (new orders, low stock alerts)
+- Spot trends with visual charts (which uniforms sell most, seasonal patterns)
+- Get early warnings about problems (running out of popular sizes)
+
+**Who Uses It:** Managers for daily business oversight, staff for quick status checks
+
+**Real-World Example:** "I can see we've sold 200 shirts this month, Pamushana High School is our biggest customer, and we're running low on Size 34 blue shirts."
+
+---
+
+#### 🏫 Schools Management (`/schools`)
+**What It Does:** Manages all your school customers and their specific uniform requirements.
+
+**Why You Need It:**
+- Add new schools quickly (just enter the school name)
+- Set uniform policies for each school ("Junior boys need 2 blue shirts each")
+- View all students enrolled at each school
+- Track which students still need uniforms (deficit reports)
+- See each school's order history and payment status
+
+**Who Uses It:** Both managers and staff for customer relationship management
+
+**Real-World Example:** "Pamushana High School requires all Form 1 boys to have 2 blue shirts and 1 pair of grey trousers. I can see that 15 students still need their second shirt."
+
+---
+
+#### 📦 Inventory Management (`/inventory`)
+**What It Does:** Controls all your uniform products, sizes, colors, and stock levels.
+
+**Why You Need It:**
+- Add new uniform types (shirts, trousers, ties, etc.)
+- Manage different colors and sizes for each uniform
+- Set prices for different variants
+- Track current stock levels in real-time
+- See which items are running low and need reordering
+- View complete history of where each item went
+
+**Who Uses It:** Primarily managers for product management, staff for stock checking
+
+**Real-World Example:** "We have 45 blue shirts in Size 32, 23 in Size 34, and only 3 in Size 36 - I need to reorder Size 36 urgently."
+
+---
+
+#### 📊 Reports (`/reports`)
+**What It Does:** Turns your data into visual insights to help make business decisions.
+
+**Why You Need It:**
+- See which uniform types are most popular
+- Compare sales between different schools
+- Identify seasonal trends (more shirts needed at term start)
+- Plan future purchases based on demand patterns
+- Generate reports for stakeholders or suppliers
+
+**Who Uses It:** Managers for strategic planning and business analysis
+
+**Real-World Example:** "The chart shows blue shirts are 60% of our sales, and demand peaks in January and May - I should order more blue shirts before those months."
+
+---
+
+#### 📋 Batch Inventory (`/batches`)
+**What It Does:** Manages bulk purchases from suppliers before they become individual sellable items.
+
+**Why You Need It:**
+- Record large deliveries from suppliers ("500 shirts arrived today")
+- Track what you paid and when you received items
+- Convert bulk purchases into individual sellable products
+- Trace any quality issues back to specific supplier batches
+- Manage supplier relationships and purchase history
+
+**Who Uses It:** Managers for supplier management and cost tracking
+
+**Real-World Example:** "Batch #2024-001 contained 500 blue shirts that cost $2,500. I've converted 300 into sellable inventory and kept 200 in reserve."
+
+---
+
+#### 👤 Profile Management (`/profile`)
+**What It Does:** Manages user accounts and access permissions.
+
+**Why You Need It:**
+- Update your personal information (name, phone, email)
+- Change your password for security
+- View your role and permissions
+- See your activity history
+- Manage profile picture and contact details
+
+**Who Uses It:** All users for account management
+
+**Real-World Example:** "I need to update my phone number so schools can reach me, and I want to change my password for better security."
+
+---
+
+### How These Pages Work Together
+
+**The Complete Workflow:**
+1. **Batches:** Record bulk purchases from suppliers
+2. **Inventory:** Convert batches into sellable products with sizes and colors
+3. **Schools:** Set up schools and their uniform requirements
+4. **Dashboard:** Monitor overall business performance
+5. **Reports:** Analyze trends to make better purchasing decisions
+6. **Profile:** Manage who can access what information
+
+**Real-World Business Flow:**
+"I receive 1000 shirts from my supplier (Batches) → I convert them into different sizes and colors (Inventory) → Schools place orders for their students → I track sales and identify trends (Dashboard & Reports) → I use trends to plan my next supplier order (back to Batches)"
+
+## 📚 Related Documentation
+
+- [Firebase Data Architecture](../FIREBASE_DATA_ARCHITECTURE.md)
+- [Mobile App README](../mobile/README.md)
+- [Inventory Flow Design](../INVENTORY_FLOW_DESIGN.md)
+
+## 🤝 Contributing
+
+1. Follow the established code patterns
+2. Maintain consistency with mobile app data structures
+3. Add proper error handling and loading states
+4. Update documentation for new features
+5. Test cross-platform compatibility
+
+## 📞 Support
+
+For technical issues or questions about the web application architecture, refer to the comprehensive documentation or contact the development team.
 - **School & Student Management:** A dedicated module for managing schools and their uniform requirements, with the ability to associate students with specific schools.
 - **Dynamic Reporting:** A powerful reporting tool with dynamic charts that visualize inventory distribution by uniform type and variants, filterable by school.
 - **Responsive Design:** A fully responsive and mobile-first design ensures a seamless experience across all devices.

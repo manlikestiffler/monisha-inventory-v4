@@ -4,13 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area,
 } from 'recharts';
-
-const COLORS = {
-  primary: ['#4ECDC4', '#45B7D1', '#96CEB4'],
-  secondary: ['#FFD93D', '#FF6B6B', '#F38181'],
-  accent: ['#6C63FF', '#8884d8', '#7158e2'],
-  neutral: ['#4B4453', '#6D6875', '#8A817C']
-};
+import { getChartColors, getCommonChartProps, getChartColorArray } from '../../utils/chartColors';
 
 const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
   const [activeCategory, setActiveCategory] = useState('analytics');
@@ -114,17 +108,18 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
       });
       
       // Convert to array format
+      const colors = getChartColors();
       const sizeDemand = Object.entries(sizeCount).map(([size, totalSales]) => {
         // Determine demand category based on sales volume
         let demandCategory = 'Low';
-        let color = '#FF6B6B';
+        let color = colors.danger;
         
         if (totalSales > 150) {
           demandCategory = 'High';
-          color = '#4ECDC4';
+          color = colors.success;
         } else if (totalSales > 75) {
           demandCategory = 'Medium';
-          color = '#FFD93D';
+          color = colors.warning;
         }
         
         return { size, totalSales, demandCategory, color };
@@ -184,11 +179,12 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
     });
     
     // Convert to array and sort by sales
+    const colorArray = getChartColorArray(5);
     const topProducts = Object.entries(productSales)
       .map(([name, sales], index) => ({
         name,
         sales,
-        color: COLORS.primary[index % COLORS.primary.length]
+        color: colorArray[index % colorArray.length]
       }))
       .sort((a, b) => b.sales - a.sales)
       .slice(0, 5); // Take top 5
@@ -257,13 +253,14 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
   const processOrdersBySchoolData = (newChartData) => {
     // Count orders by school
     const schoolOrders = {};
+    const colorArray = getChartColorArray(10);
     
     // Initialize with schools data
     schools.forEach(school => {
       schoolOrders[school.id] = {
         name: school.name || 'Unknown School',
         value: 0,
-        color: COLORS.accent[0]
+        color: colorArray[0]
       };
     });
     
@@ -276,21 +273,20 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
         schoolOrders[order.schoolId] = {
           name: 'Unknown School',
           value: 0,
-          color: COLORS.accent[0]
+          color: colorArray[0]
         };
       }
       
       schoolOrders[order.schoolId].value += 1;
     });
     
-    // Convert to array format and assign colors
+    // Convert to array and sort by value
     const ordersBySchool = Object.values(schoolOrders)
-      .filter(school => school.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 5) // Take top 5 schools
       .map((school, index) => ({
         ...school,
-        color: COLORS.accent[index % COLORS.accent.length]
+        color: colorArray[index % colorArray.length]
       }));
     
     newChartData.schools.ordersPerSchool = ordersBySchool;
@@ -305,10 +301,10 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white/80 backdrop-blur-md p-4 rounded-lg border border-slate-300 shadow-xl">
-          <p className="text-slate-900 font-medium mb-2">{label}</p>
+        <div className="surface p-4 rounded-lg border border-base shadow-elevation-3">
+          <p className="text-base font-medium mb-2">{label}</p>
           {payload.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color || '#1e293b' }}>
+            <p key={index} className="text-sm" style={{ color: entry.color }}>
               {entry.name}: {entry.value.toLocaleString()}
             </p>
           ))}
@@ -367,9 +363,9 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
         return (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={currentYearData} margin={{ top: 5, right: 20, left: 30, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-              <XAxis dataKey="size" stroke="#475569" />
-              <YAxis stroke="#475569" label={{ value: 'Total Units Sold', angle: -90, position: 'insideLeft', fill: '#475569', dy: 40 }} />
+              <CartesianGrid {...getCommonChartProps().cartesianGrid} />
+              <XAxis dataKey="size" {...getCommonChartProps().xAxis} />
+              <YAxis {...getCommonChartProps().yAxis} label={{ value: 'Total Units Sold', angle: -90, position: 'insideLeft', dy: 40 }} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="totalSales" name="Total Sales" radius={[4, 4, 0, 0]}>
                 {currentYearData.map((entry) => <Cell key={entry.size} fill={entry.color} />)}
@@ -390,20 +386,15 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
           );
         }
         
+        const primaryColor = getChartColors().primary;
         return (
           <ResponsiveContainer width="100%" height={400}>
             <AreaChart data={revenueData}>
-              <defs>
-                <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-              <XAxis dataKey="month" stroke="#475569" />
-              <YAxis stroke="#475569" />
+              <CartesianGrid {...getCommonChartProps().cartesianGrid} />
+              <XAxis dataKey="month" {...getCommonChartProps().xAxis} />
+              <YAxis {...getCommonChartProps().yAxis} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="revenue" stroke="#8884d8" fill="url(#revenueGradient)" />
+              <Area type="monotone" dataKey="revenue" stroke={primaryColor} fill={primaryColor} fillOpacity={0.3} />
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -422,9 +413,9 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
         return (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={topProductsData} layout="vertical" margin={{ left: 100 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-              <XAxis type="number" stroke="#475569" />
-              <YAxis dataKey="name" type="category" stroke="#475569" width={100} />
+              <CartesianGrid {...getCommonChartProps().cartesianGrid} />
+              <XAxis type="number" {...getCommonChartProps().xAxis} />
+              <YAxis dataKey="name" type="category" {...getCommonChartProps().yAxis} width={100} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="sales" name="Units Sold" radius={[0, 4, 4, 0]}>
                  {topProductsData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
@@ -445,17 +436,18 @@ const DynamicCharts = ({ products, orders, schools, batches, loading }) => {
           );
         }
         
+        const colors = getChartColors();
         return (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={inventoryBySchoolData} layout="vertical" margin={{ left: 100 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-              <XAxis type="number" stroke="#475569" />
-              <YAxis dataKey="name" type="category" stroke="#475569" width={100} />
+              <CartesianGrid {...getCommonChartProps().cartesianGrid} />
+              <XAxis type="number" {...getCommonChartProps().xAxis} />
+              <YAxis dataKey="name" type="category" {...getCommonChartProps().yAxis} width={100} />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Bar dataKey="inStock" name="In Stock" stackId="a" fill="#4ECDC4" />
-              <Bar dataKey="lowStock" name="Low Stock" stackId="a" fill="#FFD93D" />
-              <Bar dataKey="outOfStock" name="Out of Stock" stackId="a" fill="#FF6B6B" />
+              <Bar dataKey="inStock" name="In Stock" stackId="a" fill={colors.success} />
+              <Bar dataKey="lowStock" name="Low Stock" stackId="a" fill={colors.warning} />
+              <Bar dataKey="outOfStock" name="Out of Stock" stackId="a" fill={colors.danger} />
             </BarChart>
           </ResponsiveContainer>
         );

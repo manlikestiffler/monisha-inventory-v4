@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Tab } from '@headlessui/react';
-import { FiUsers, FiShoppingBag, FiPlus } from 'react-icons/fi';
+import { FiUsers, FiShoppingBag, FiPlus, FiAlertTriangle } from 'react-icons/fi';
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -11,6 +11,7 @@ const SchoolTabUI = ({
   onAddStudent,
   uniformsTabContent,
   studentsTabContent,
+  deficitReportTabContent,
 }) => {
   const [selectedTab, setSelectedTab] = useState(0);
 
@@ -22,8 +23,10 @@ const SchoolTabUI = ({
             <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 dark:from-red-500/10 dark:to-red-600/10 flex items-center justify-center mr-3">
               {selectedTab === 0 ? (
                 <FiShoppingBag className="w-5 h-5 text-red-600 dark:text-red-400" />
-              ) : (
+              ) : selectedTab === 1 ? (
                 <FiUsers className="w-5 h-5 text-red-600 dark:text-red-400" />
+              ) : (
+                <FiAlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
               )}
             </span>
             {school?.name} Management
@@ -59,6 +62,20 @@ const SchoolTabUI = ({
                 <FiUsers className="w-4 h-4 mr-2" />
                 Students
               </Tab>
+              <Tab
+                className={({ selected }) =>
+                  classNames(
+                    'flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200',
+                    'focus:outline-none',
+                    selected
+                      ? 'bg-red-600 text-white shadow-lg shadow-red-600/20'
+                      : 'text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-white dark:hover:bg-gray-700/50'
+                  )
+                }
+              >
+                <FiAlertTriangle className="w-4 h-4 mr-2" />
+                Deficit Report
+              </Tab>
             </Tab.List>
 
             {selectedTab === 1 && (
@@ -79,6 +96,9 @@ const SchoolTabUI = ({
           </Tab.Panel>
           <Tab.Panel>
             {studentsTabContent}
+          </Tab.Panel>
+          <Tab.Panel>
+            {deficitReportTabContent}
           </Tab.Panel>
         </Tab.Panels>
       </Tab.Group>

@@ -54,7 +54,7 @@ const Section = ({ title, description, children }) => (
 );
 
 const Input = (props) => (
-  <input {...props} className={`block w-full h-12 px-4 rounded-lg bg-white dark:bg-background text-gray-900 dark:text-foreground border border-gray-300 dark:border-input placeholder-gray-400 focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 ${props.className || ''}`} />
+  <input {...props} className={`block w-full h-12 px-4 rounded-lg bg-white dark:bg-background text-gray-900 dark:text-foreground border border-gray-300 dark:border-input placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all duration-200 ${props.className || ''}`} />
 );
 
 const Select = (props) => (
@@ -809,7 +809,7 @@ const AddProductNew = () => {
         <form onSubmit={handleSubmit} className="space-y-8">
           
           <Section title="Product Type" description="Select whether you're adding a finished uniform or a raw material.">
-            <div className="flex w-full p-1 bg-gray-100 dark:bg-secondary rounded-lg">
+            <div className="flex w-full p-1 bg-gray-100 dark:bg-card rounded-lg border dark:border-input">
               <button type="button" onClick={() => setProductType(PRODUCT_TYPES.UNIFORM)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.UNIFORM ? 'bg-primary text-primary-foreground' : 'text-gray-700 dark:text-muted-foreground hover:text-gray-900 dark:hover:text-foreground'}`}>Uniform</button>
               <button type="button" onClick={() => setProductType(PRODUCT_TYPES.RAW_MATERIAL)} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${productType === PRODUCT_TYPES.RAW_MATERIAL ? 'bg-primary text-primary-foreground' : 'text-gray-700 dark:text-muted-foreground hover:text-gray-900 dark:hover:text-foreground'}`}>Raw Material</button>
             </div>
@@ -904,7 +904,7 @@ const AddProductNew = () => {
 
               <Section title="Product Image" description="Upload a high-quality image of the product.">
                 <div className="flex items-center justify-center w-full">
-                  <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-300 dark:border-input rounded-xl cursor-pointer bg-gray-50 dark:bg-secondary hover:bg-gray-100 dark:hover:bg-secondary/80 transition-colors">
+                  <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-300 dark:border-input rounded-xl cursor-pointer bg-gray-50 dark:bg-card hover:bg-gray-100 dark:hover:bg-card/80 transition-colors">
                     {uniformData.imageUrl ? (
                       <img src={uniformData.imageUrl} alt="Product preview" className="w-full h-full object-contain rounded-xl p-2" />
                     ) : (
@@ -921,7 +921,7 @@ const AddProductNew = () => {
               
               <Section title="Product Variants" description="Add variants with different types, colors, and sizes.">
                 {!uniformData.type ? (
-                  <div className="mt-4 p-4 bg-slate-50 dark:bg-secondary/50 rounded-lg text-center border border-slate-200 dark:border-transparent">
+                  <div className="mt-4 p-4 bg-slate-50 dark:bg-card rounded-lg text-center border border-slate-200 dark:border-input">
                     <p className="text-slate-500 dark:text-muted-foreground">Please select a product type first to see available variants</p>
                   </div>
                 ) : (availableQuantities[uniformData.type] > 0) ? (
@@ -1030,7 +1030,7 @@ const AddProductNew = () => {
                                     <button
                                       type="button"
                                       onClick={() => handleAddSize(variantIndex)}
-                                      className="text-sm bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 px-3 py-1 rounded-md transition-colors flex items-center gap-1"
+                                      className="text-sm bg-primary/20 text-primary hover:bg-primary/30 dark:bg-primary/30 dark:hover:bg-primary/40 px-3 py-1 rounded-md transition-colors flex items-center gap-1"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1041,9 +1041,9 @@ const AddProductNew = () => {
                                   
                                   {/* Size Header */}
                                   <div className="grid grid-cols-1 md:grid-cols-11 gap-2 mb-2 px-2">
-                                    <div className="md:col-span-4 text-xs text-gray-500 font-medium">Size</div>
-                                    <div className="md:col-span-3 text-xs text-gray-500 font-medium">Quantity</div>
-                                    <div className="md:col-span-3 text-xs text-gray-500 font-medium">Price</div>
+                                    <div className="md:col-span-4 text-xs text-gray-500 dark:text-gray-400 font-medium">Size</div>
+                                    <div className="md:col-span-3 text-xs text-gray-500 dark:text-gray-400 font-medium">Quantity</div>
+                                    <div className="md:col-span-3 text-xs text-gray-500 dark:text-gray-400 font-medium">Price</div>
                                     <div className="md:col-span-1"></div>
                                   </div>
                                   
@@ -1062,7 +1062,7 @@ const AddProductNew = () => {
                                               const profitMargin = costPrice > 0 ? (profit / costPrice) * 100 : 0;
                                               profitLossIndicator = <span className="text-xs text-red-400">Loss: ${Math.abs(profit).toFixed(2)} ({profitMargin.toFixed(0)}%)</span>;
                                           } else {
-                                              profitLossIndicator = <span className="text-xs text-gray-400">Breakeven</span>;
+                                              profitLossIndicator = <span className="text-xs text-gray-400 dark:text-gray-500">Breakeven</span>;
                                           }
                                       }
 
@@ -1104,7 +1104,7 @@ const AddProductNew = () => {
                                                 <div className="flex flex-col">
                                                   <button 
                                                     type="button" 
-                                                    className="text-gray-400 hover:text-white px-1"
+                                                    className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 px-1"
                                                     onClick={() => {
                                                       const newValue = size.quantity ? parseInt(size.quantity) + 1 : 1;
                                                       handleSizeChange(variantIndex, sizeIndex, 'quantity', newValue.toString());
@@ -1116,7 +1116,7 @@ const AddProductNew = () => {
                                                   </button>
                                                   <button 
                                                     type="button" 
-                                                    className="text-gray-400 hover:text-white px-1"
+                                                    className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 px-1"
                                                     onClick={() => {
                                                       if (!size.quantity || parseInt(size.quantity) <= 1) return;
                                                       const newValue = parseInt(size.quantity) - 1;
@@ -1145,13 +1145,13 @@ const AddProductNew = () => {
                                                 className={`pl-8 border-gray-300 dark:border-gray-700/50 bg-white dark:bg-black/30 ${!size.price ? "border-red-500/50" : ""}`}
                                               />
                                               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <span className="text-gray-500 font-medium">$</span>
+                                                <span className="text-gray-500 dark:text-gray-400 font-medium">$</span>
               </div>
                                               <div className="absolute inset-y-0 right-0 flex items-center pr-2">
                                                 <div className="flex flex-col">
                                                   <button 
                                                     type="button" 
-                                                    className="text-gray-400 hover:text-white px-1"
+                                                    className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 px-1"
                                                     onClick={() => {
                                                       const currentPrice = parseFloat(size.price || 0);
                                                       const newValue = (currentPrice + 0.5).toFixed(2);
@@ -1164,7 +1164,7 @@ const AddProductNew = () => {
                                                   </button>
                                                   <button 
                                                     type="button" 
-                                                    className="text-gray-400 hover:text-white px-1"
+                                                    className="text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 px-1"
                                                     onClick={() => {
                                                       const currentPrice = parseFloat(size.price || 0);
                                                       if (currentPrice <= 0) return;
@@ -1182,7 +1182,7 @@ const AddProductNew = () => {
                                             </div>
                                             {!size.price && <p className="text-xs text-red-400 mt-1">Price is required</p>}
                                             <div className="h-4 mt-1">
-                                                {costPrice !== null && <p className="text-xs text-gray-500">Cost: ${costPrice.toFixed(2)}</p>}
+                                                {costPrice !== null && <p className="text-xs text-gray-500 dark:text-gray-400">Cost: ${costPrice.toFixed(2)}</p>}
                                                 {profitLossIndicator}
                                             </div>
                                           </div>
@@ -1207,7 +1207,7 @@ const AddProductNew = () => {
                                   
                                   {/* Show error if no sizes */}
                                   {variant.sizes.length === 0 && (
-                                    <div className="text-center p-4 bg-gray-100 dark:bg-gray-800/30 rounded-lg">
+                                    <div className="text-center p-4 bg-gray-100 dark:bg-card rounded-lg border dark:border-input">
                                       <p className="text-gray-500 dark:text-gray-400">No sizes added yet. Click the "Add Size" button to add sizes.</p>
                                     </div>
                                   )}
@@ -1233,12 +1233,12 @@ const AddProductNew = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="mb-6 p-8 bg-gray-800/30 rounded-lg text-center">
+                      <div className="mb-6 p-8 bg-gray-100 dark:bg-card rounded-lg text-center border dark:border-input">
                         <div className="flex flex-col items-center gap-4">
-                          <svg className="w-16 h-16 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-16 h-16 text-gray-400 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                           </svg>
-                          <p className="text-gray-400 dark:text-gray-400 max-w-md mx-auto">No variants added yet. Each product needs at least one variant with size and pricing information.</p>
+                          <p className="text-gray-400 dark:text-gray-300 max-w-md mx-auto">No variants added yet. Each product needs at least one variant with size and pricing information.</p>
                           <button
                             type="button"
                             onClick={addVariant}
@@ -1255,7 +1255,7 @@ const AddProductNew = () => {
                     )}
                   </div>
                 ) : (
-                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800/50 rounded-lg text-center">
+                  <div className="mt-4 p-4 bg-gray-100 dark:bg-card rounded-lg text-center border dark:border-input">
                     <p className="text-red-500 dark:text-red-400">No stock available for this product type. All items have been depleted from the batch inventory.</p>
                   </div>
                 )}
@@ -1286,8 +1286,8 @@ const AddProductNew = () => {
                 <FormField label="Color">
                   <div className="flex items-center gap-2">
                     <div className="relative">
-                      <button type="button" className="h-12 w-12 rounded-lg border border-gray-300 dark:border-gray-700" style={{ backgroundColor: rawMaterialData.color }} onClick={() => setShowRawMaterialColorPicker(prev => !prev)} />
-                      {showRawMaterialColorPicker && <div className="absolute z-10 mt-2"><div className="fixed inset-0" onClick={() => setShowRawMaterialColorPicker(false)} /><HexColorPicker color={rawMaterialData.color} onChange={(color) => handleRawMaterialChange('color', color)} /></div>}
+                      <button type="button" className="h-12 w-12 rounded-lg border border-gray-300 dark:border-input" style={{ backgroundColor: rawMaterialData.color }} onClick={() => setShowRawMaterialColorPicker(prev => !prev)} />
+                      {showRawMaterialColorPicker && <div className="absolute z-10 mt-2"><div className="fixed inset-0" onClick={() => setShowRawMaterialColorPicker(false)} /><div className="relative bg-card p-2 rounded-lg shadow-xl border border-input"><HexColorPicker color={rawMaterialData.color} onChange={(color) => handleRawMaterialChange('color', color)} /></div></div>}
                     </div>
                     <Input type="text" value={rawMaterialData.color} onChange={(e) => handleRawMaterialChange('color', e.target.value)} />
                   </div>

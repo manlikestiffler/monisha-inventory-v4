@@ -143,6 +143,36 @@ const Settings = () => {
               className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded"
             />
           </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-gray-900">Order Updates</h3>
+              <p className="text-sm text-gray-500">Get notified about order status changes</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={profileData.notifications.orderUpdates}
+              onChange={(e) => setProfileData(prev => ({
+                ...prev,
+                notifications: { ...prev.notifications, orderUpdates: e.target.checked }
+              }))}
+              className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-gray-900">Push Notifications</h3>
+              <p className="text-sm text-gray-500">Receive push notifications on your device</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={profileData.notifications.push || false}
+              onChange={(e) => setProfileData(prev => ({
+                ...prev,
+                notifications: { ...prev.notifications, push: e.target.checked }
+              }))}
+              className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded"
+            />
+          </div>
         </div>
       </SettingsSection>
 
