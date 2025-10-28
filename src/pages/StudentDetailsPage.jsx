@@ -139,11 +139,11 @@ const StudentDetailsPage = () => {
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <button 
-            onClick={() => navigate(`/schools/${schoolId}`, { state: { refresh: true } })} 
+            onClick={() => navigate(`/schools/${schoolId}`, { state: { activeTab: 'students' } })} 
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <FiArrowLeft />
-            Back
+            Back to Students
           </button>
         </div>
 

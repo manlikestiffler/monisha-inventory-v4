@@ -71,15 +71,8 @@ const Signup = () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // Configure action code settings for better deliverability
-      const actionCodeSettings = {
-        url: window.location.origin + '/login', // URL to redirect back to after verification
-        handleCodeInApp: false,
-        dynamicLinkDomain: window.location.hostname
-      };
-      
-      // Send email verification with custom settings
-      await sendEmailVerification(user, actionCodeSettings);
+      // Send email verification without dynamic link domain
+      await sendEmailVerification(user);
       
       // Generate a display name from first and last name
       const displayName = `${firstName} ${lastName}`;
@@ -96,17 +89,30 @@ const Signup = () => {
         appSource: 'inventory-app'
       };
       
-      // If this is the first user and it matches superuser email, make them a manager
+      // Only tinashegomo96@gmail.com should be super admin (permanent hardcoded)
       const SUPER_ADMIN_EMAIL = 'tinashegomo96@gmail.com';
+      const isPermanentSuperAdmin = (email) => {
+        return email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+      };
       
-      if (firstUser || user.email === SUPER_ADMIN_EMAIL) {
-        // First user or superuser is automatically a manager
-        await saveManagerProfile(user.uid, profileData);
-        setSuccessMessage('Account created! Please check your email to verify your account. If you don\'t see the email, please check your spam folder.');
+      if (isPermanentSuperAdmin(user.email)) {
+        // Super admin user gets manager profile with super_admin role
+        const managerData = {
+          ...profileData,
+          role: 'super_admin',
+          isActive: true
+        };
+        await saveManagerProfile(user.uid, managerData);
+        setSuccessMessage('Super admin account created! Please check your email to verify your account.');
       } else {
-        // All other users are registered as staff
-        await saveStaffProfile(user.uid, profileData);
-        setSuccessMessage('Account created! Please check your email to verify your account. If you don\'t see the email, please check your spam folder.');
+        // All other users are registered as staff (including first user if not super admin)
+        const staffData = {
+          ...profileData,
+          role: 'staff',
+          isActive: true
+        };
+        await saveStaffProfile(user.uid, staffData);
+        setSuccessMessage('Account created! Please check your email to verify your account.');
       }
       
       // Set the user in the global state

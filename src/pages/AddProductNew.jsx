@@ -685,7 +685,7 @@ const AddProductNew = () => {
         }
         productData = {
           ...uniformData,
-          createdBy: user?.email || 'unknown',
+          createdBy: userProfile.fullName || userProfile.name || user?.email || 'unknown', // Use full name instead of email
           createdByUid: userProfile.id, // Use the Firestore document ID
           batchId: batchId,
         };
@@ -726,7 +726,7 @@ const AddProductNew = () => {
         }
         productData = {
           ...rawMaterialData,
-          createdBy: user?.email || 'unknown',
+          createdBy: userProfile.fullName || userProfile.name || user?.email || 'unknown', // Use full name instead of email
           createdByUid: userProfile.id, // Use the Firestore document ID
           productType: "raw_material"
         };

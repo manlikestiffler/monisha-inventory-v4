@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy, getDoc, updateDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy, getDoc, updateDoc, arrayUnion, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export const useInventoryStore = create((set, get) => ({
@@ -79,8 +79,38 @@ export const useInventoryStore = create((set, get) => ({
       const allUniforms = uniformsWithVariants.filter(item => item.productType === 'uniform');
       const allVariants = variantsData;
       
+      // Combine and sort all products by createdAt (newest first)
+      const allProducts = [...uniformsWithVariants, ...materialsData]
+        .sort((a, b) => {
+          // Handle different timestamp formats more robustly
+          let aTime, bTime;
+          
+          // For Firebase Timestamp objects
+          if (a.createdAt?.toDate) {
+            aTime = a.createdAt.toDate();
+          } else if (a.createdAt instanceof Date) {
+            aTime = a.createdAt;
+          } else if (typeof a.createdAt === 'string') {
+            aTime = new Date(a.createdAt);
+          } else {
+            aTime = new Date(0); // Fallback for very old products
+          }
+          
+          if (b.createdAt?.toDate) {
+            bTime = b.createdAt.toDate();
+          } else if (b.createdAt instanceof Date) {
+            bTime = b.createdAt;
+          } else if (typeof b.createdAt === 'string') {
+            bTime = new Date(b.createdAt);
+          } else {
+            bTime = new Date(0); // Fallback for very old products
+          }
+          
+          return bTime - aTime; // Descending order (newest first)
+        });
+      
       set({ 
-        products: [...uniformsWithVariants, ...materialsData], 
+        products: allProducts, 
         uniforms: allUniforms,
         uniformVariants: allVariants,
         loading: false,
@@ -90,7 +120,15 @@ export const useInventoryStore = create((set, get) => ({
       console.log('🌐 Real-time update: Products synced', {
         uniforms: uniformsWithVariants.length,
         materials: materialsData.length,
-        variants: variantsData.length
+        variants: variantsData.length,
+        firstThreeProducts: allProducts.slice(0, 3).map(p => ({
+          name: p.name || p.productName,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+          createdTimestamp: p.createdAt?.toDate?.() || p.createdAt,
+          updatedTimestamp: p.updatedAt?.toDate?.() || p.updatedAt,
+          id: p.id
+        }))
       });
     };
     
@@ -110,19 +148,97 @@ export const useInventoryStore = create((set, get) => ({
     get().setupRealtimeListeners();
   },
 
+  // Get products filtered by gender and level for uniform policies
+  getProductsByGenderAndLevel: (gender, level) => {
+    const { products } = get();
+    
+    return products.filter(product => {
+      // Only filter uniforms, not raw materials
+      if (product.productType !== 'uniform') return false;
+      
+      // Check if product matches the gender criteria
+      const productGender = product.gender?.toLowerCase() || product.sex?.toLowerCase();
+      const targetGender = gender?.toLowerCase();
+      
+      // Gender matching logic
+      const genderMatch = 
+        targetGender === 'unisex' || 
+        productGender === 'unisex' ||
+        productGender === targetGender;
+      
+      // Check if product matches the level criteria
+      const productLevel = product.level?.toLowerCase();
+      const targetLevel = level?.toLowerCase();
+      
+      // Level matching logic
+      const levelMatch = 
+        !targetLevel || // No level specified means all levels
+        !productLevel || // Product has no level means it fits all levels
+        productLevel === targetLevel;
+      
+      return genderMatch && levelMatch;
+    });
+  },
+
+  // Get available uniforms for policy creation with detailed filtering
+  getAvailableUniformsForPolicy: (gender, level) => {
+    const { uniforms, uniformVariants } = get();
+    
+    const filteredUniforms = uniforms.filter(uniform => {
+      // Check gender match
+      const uniformGender = uniform.gender?.toLowerCase() || uniform.sex?.toLowerCase();
+      const targetGender = gender?.toLowerCase();
+      
+      const genderMatch = 
+        targetGender === 'unisex' || 
+        uniformGender === 'unisex' ||
+        uniformGender === targetGender;
+      
+      // Check level match
+      const uniformLevel = uniform.level?.toLowerCase();
+      const targetLevel = level?.toLowerCase();
+      
+      const levelMatch = 
+        !targetLevel || 
+        !uniformLevel || 
+        uniformLevel === targetLevel;
+      
+      return genderMatch && levelMatch;
+    });
+    
+    // Attach variants to each uniform
+    return filteredUniforms.map(uniform => {
+      const variants = uniformVariants.filter(variant => variant.uniformId === uniform.id);
+      return { ...uniform, variants };
+    });
+  },
+
   addProduct: async (productData, type) => {
     try {
       set({ loading: true, error: null });
       
-      // If the product has a batchId, update the batch inventory first
-      if (productData.batchId && productData.variantType && productData.color && productData.size) {
-        await get().updateBatchInventory(
-          productData.batchId,
-          productData.variantType,
-          productData.color,
-          productData.size,
-          productData.quantity
-        );
+      // CRITICAL FIX: Deduct quantities from batch inventory for all variants and sizes
+      if (type === 'uniform' && productData.variants && productData.variants.length > 0) {
+        
+        // Process each variant and its sizes for batch deduction
+        for (const variant of productData.variants) {
+          if (variant.sizes && variant.sizes.length > 0) {
+            for (const sizeData of variant.sizes) {
+              if (sizeData.batchAllocations && sizeData.batchAllocations.length > 0) {
+                // Process each batch allocation for this size
+                for (const batchAllocation of sizeData.batchAllocations) {
+                  await get().updateBatchInventory(
+                    batchAllocation.batchId,
+                    batchAllocation.variantType, // Correctly pass the variantType from the allocation
+                    batchAllocation.color,       // Correctly pass the color from the allocation
+                    sizeData.size,
+                    sizeData.quantity
+                  );
+                }
+              }
+            }
+          }
+        }
       }
 
       if (type === 'uniform') {
@@ -130,8 +246,8 @@ export const useInventoryStore = create((set, get) => ({
         const uniformRef = await addDoc(collection(db, 'uniforms'), {
           ...productData,
           productType: 'uniform',
-          createdAt: new Date(),
-          updatedAt: new Date()
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
 
         // Add variants
@@ -143,18 +259,20 @@ export const useInventoryStore = create((set, get) => ({
             color: variant.color,
             sizes: variant.sizes,
             defaultReorderLevel: 5,
-            createdAt: new Date()
+            createdAt: serverTimestamp()
           })
         );
 
         await Promise.all(variantPromises);
+        
+        console.log('✅ Product created and batch inventory updated successfully');
       } else {
         // Add raw material
         await addDoc(collection(db, 'raw_materials'), {
           ...productData,
           productType: 'raw_material',
-          createdAt: new Date(),
-          updatedAt: new Date()
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
       }
 
@@ -163,6 +281,7 @@ export const useInventoryStore = create((set, get) => ({
     } catch (error) {
       console.error('Error adding product:', error);
       set({ error: 'Failed to add product', loading: false });
+      throw error; // Re-throw to handle in UI
     }
   },
 
@@ -170,13 +289,25 @@ export const useInventoryStore = create((set, get) => ({
     const batchRef = doc(db, 'batchInventory', batchId);
     try {
       const batchDoc = await getDoc(batchRef);
+      
       if (batchDoc.exists()) {
         const batchData = batchDoc.data();
+        
+        if (!batchData.items || !Array.isArray(batchData.items)) {
+          console.warn(`Batch ${batchId} has no items array, skipping deduction`);
+          return;
+        }
+        
         const updatedItems = batchData.items.map(item => {
           if (item.variantType === variantType && item.color === color) {
             const updatedSizes = item.sizes.map(s => {
               if (s.size === size) {
-                return { ...s, quantity: s.quantity - quantityToSubtract };
+                const newQuantity = (s.quantity || 0) - quantityToSubtract;
+                if (newQuantity < 0) {
+                  console.warn(`Negative stock for ${item.variantType} ${s.size}. Setting to 0.`);
+                  return { ...s, quantity: 0 };
+                }
+                return { ...s, quantity: newQuantity };
               }
               return s;
             });
@@ -187,11 +318,12 @@ export const useInventoryStore = create((set, get) => ({
 
         await updateDoc(batchRef, { items: updatedItems });
       } else {
-        throw new Error('Batch not found');
+        console.warn(`Batch document not found with ID: ${batchId}`);
+        return;
       }
     } catch (error) {
       console.error('Error updating batch inventory:', error);
-      throw error;
+      return;
     }
   },
 

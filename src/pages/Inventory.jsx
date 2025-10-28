@@ -206,7 +206,7 @@ const Inventory = () => {
         console.log('Checking for user collections...');
         
         // Try different possible collection names for users
-        const possibleCollections = ['staff', 'managers', 'users', 'accounts'];
+        const possibleCollections = ['inventory_staff', 'inventory_managers', 'staff', 'managers', 'users', 'accounts'];
         const userCollections = {};
         
         for (const collectionName of possibleCollections) {
@@ -288,7 +288,7 @@ const Inventory = () => {
             allUsers.push({
               id: doc.id,
               ...data,
-              role: collectionName === 'managers' ? 'manager' : 'staff'
+              role: collectionName.includes('managers') ? 'manager' : 'staff'
             });
           });
         });
@@ -299,8 +299,9 @@ const Inventory = () => {
         // Create users map for quick lookup
         const usersMapData = {};
         allUsers.forEach(user => {
+          const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
           usersMapData[user.id] = {
-            name: user.name || user.email || 'Unknown User',
+            name: fullName || user.displayName || user.name || user.email || 'Unknown User',
             role: user.role || 'N/A'
           };
         });
@@ -1040,53 +1041,99 @@ const Inventory = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="min-w-full">
+              <thead className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-border">
                 <tr>
-                  <th scope="col" className="px-6 py-3">Product</th>
-                  <th scope="col" className="px-6 py-3">Level</th>
-                  <th scope="col" className="px-6 py-3">Type</th>
-                  <th scope="col" className="px-6 py-3">Gender</th>
-                  <th scope="col" className="px-6 py-3">Creator</th>
-                  <th scope="col" className="px-6 py-3">Role</th>
-                  <th scope="col" className="px-6 py-3">Status</th>
-                  <th scope="col" className="px-6 py-3 text-right">Actions</th>
+                  {[
+                    { key: 'product', label: 'Product', align: 'left' },
+                    { key: 'level', label: 'Level', align: 'center' },
+                    { key: 'type', label: 'Type', align: 'center' },
+                    { key: 'gender', label: 'Gender', align: 'center' },
+                    { key: 'creator', label: 'Creator', align: 'center' },
+                    { key: 'role', label: 'Role', align: 'center' },
+                    { key: 'status', label: 'Status', align: 'center' },
+                    { key: 'actions', label: 'Actions', align: 'center' }
+                  ].map(({ key, label, align }) => (
+                    <th key={key} scope="col" className={`px-6 py-4 text-${align} text-sm font-bold text-foreground`}>
+                      <div className={`flex items-center gap-2 ${align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start'}`}>
+                        <span>{label}</span>
+                      </div>
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody>
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600/50">
+              <tbody className="bg-card">
+                {filteredProducts.map((product, index) => (
+                  <tr key={product.id} className={`${index % 2 === 0 ? 'bg-card' : 'bg-muted/20'} hover:bg-primary/5 transition-all duration-200 cursor-pointer border-b border-border/50 last:border-b-0`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <img 
                           src={getProductImage(product)} 
                           alt={product.name} 
-                          className="w-12 h-12 rounded-lg object-cover"
+                          className="w-12 h-12 rounded-lg object-cover border border-border shadow-sm"
                         />
                         <div>
-                          <div className="font-semibold text-gray-900 dark:text-gray-100">{product.name || 'N/A'}</div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">{product.school ? schoolsMap[product.school] : 'General'}</div>
+                          <div className="font-semibold text-foreground">{product.name || 'N/A'}</div>
+                          <div className="text-sm text-muted-foreground">{product.school ? schoolsMap[product.school] : 'General'}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">{product.level || 'N/A'}</td>
-                    <td className="px-6 py-4">{product.type || 'N/A'}</td>
-                    <td className="px-6 py-4">{product.gender || 'N/A'}</td>
-                    <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-200">{product.creatorName || 'N/A'}</td>
-                    <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{product.creatorRole || 'N/A'}</td>
-                    <td className="px-6 py-4">
-                      <Badge variant={calculateStockStatus(product.variants).type}>
+                    <td className="px-6 py-4 text-center">
+                      <span className="px-3 py-1 inline-flex text-xs font-bold rounded-full bg-gradient-to-r from-blue-500/10 to-blue-600/10 text-blue-600 border border-blue-200 dark:border-blue-800 capitalize">
+                        {product.level || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="px-3 py-1 inline-flex text-xs font-bold rounded-full bg-gradient-to-r from-green-500/10 to-green-600/10 text-green-600 border border-green-200 dark:border-green-800 capitalize">
+                        {product.type || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="px-3 py-1 inline-flex text-xs font-bold rounded-full bg-gradient-to-r from-purple-500/10 to-purple-600/10 text-purple-600 border border-purple-200 dark:border-purple-800 capitalize">
+                        {product.gender || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="bg-muted/30 rounded-lg p-2 border border-border">
+                        <div className="text-sm font-medium text-foreground">{product.creatorName || 'N/A'}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="px-2 py-1 text-xs font-medium text-muted-foreground bg-muted/50 rounded-full">
+                        {product.creatorRole || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <Badge variant={calculateStockStatus(product.variants).type} className="px-3 py-1 rounded-full font-bold">
                         {calculateStockStatus(product.variants).type.replace('_', ' ')}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center space-x-4">
-                        <button onClick={() => handleViewDetails(product)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-200"><Eye size={18} /></button>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button 
+                          onClick={() => handleViewDetails(product)} 
+                          className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-all duration-200 border border-blue-200"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                         {isManager() && (
                           <>
-                            <button onClick={() => handleEdit(product)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"><Edit2 size={18} /></button>
-                            <button onClick={() => handleDelete(product)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-200"><Trash2 size={18} /></button>
+                            <button 
+                              onClick={() => handleEdit(product)} 
+                              className="p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 hover:text-green-700 transition-all duration-200 border border-green-200"
+                              title="Edit Product"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(product)} 
+                              className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 transition-all duration-200 border border-red-200"
+                              title="Delete Product"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </>
                         )}
                       </div>

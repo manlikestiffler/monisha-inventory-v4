@@ -39,8 +39,8 @@ export const useBatchStore = create((set, get) => ({
     try {
       const batchesSnapshot = await getDocs(collection(db, 'batchInventory'));
       const batchesData = batchesSnapshot.docs.map(doc => ({
-        id: doc.id,
         ...doc.data(),
+        id: doc.id, // Must come AFTER spread to overwrite any local id field
         createdAt: doc.data().createdAt?.toDate(),
         updatedAt: doc.data().updatedAt?.toDate()
       }));
@@ -57,8 +57,8 @@ export const useBatchStore = create((set, get) => ({
       if (batchDoc.exists()) {
         const data = batchDoc.data();
         return { 
-          id: batchDoc.id, 
           ...data,
+          id: batchDoc.id, // Must come AFTER spread to overwrite any local id field
           createdAt: data.createdAt?.toDate(),
           updatedAt: data.updatedAt?.toDate()
         };
@@ -76,8 +76,8 @@ export const useBatchStore = create((set, get) => ({
       if (doc.exists()) {
         const data = doc.data();
         callback({ 
-          id: doc.id, 
           ...data,
+          id: doc.id, // Must come AFTER spread to overwrite any local id field
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
           updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
         });

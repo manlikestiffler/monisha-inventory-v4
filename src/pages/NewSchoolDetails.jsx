@@ -408,11 +408,29 @@ const NewSchoolDetails = () => {
 
     const fetchAllUsers = async () => {
       try {
-        const managersSnapshot = await getDocs(collection(db, 'managers'));
-        const staffSnapshot = await getDocs(collection(db, 'staff'));
-        const managers = managersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const staff = staffSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setAllUsers([...managers, ...staff]);
+        // Try different possible collection names for users
+        const possibleCollections = ['inventory_staff', 'inventory_managers', 'staff', 'managers', 'users', 'accounts'];
+        const allUsersData = [];
+        
+        for (const collectionName of possibleCollections) {
+          try {
+            const snapshot = await getDocs(collection(db, collectionName));
+            if (snapshot.size > 0) {
+              const users = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                role: collectionName.includes('managers') ? 'manager' : 'staff'
+              }));
+              allUsersData.push(...users);
+              console.log(`Found ${snapshot.size} users in ${collectionName} collection`);
+            }
+          } catch (error) {
+            console.log(`Collection ${collectionName} not accessible:`, error.message);
+          }
+        }
+        
+        console.log('Total users found for student table:', allUsersData.length);
+        setAllUsers(allUsersData);
       } catch (error) {
         console.error('Error fetching users:', error);
       }
@@ -428,6 +446,12 @@ const NewSchoolDetails = () => {
     if (location.state?.refresh) {
       refreshSchoolData();
       // Clear the state to prevent refresh on subsequent renders
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // Handle activeTab from navigation state
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+      // Clear the state to prevent setting tab on subsequent renders
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state]);

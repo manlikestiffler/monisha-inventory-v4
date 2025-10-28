@@ -98,8 +98,8 @@ const BatchInventory = () => {
             return fetchedNames;
           };
 
-          const staffNames = await fetchNames(emailsToFetch, 'staffs');
-          const managerNames = await fetchNames(emailsToFetch, 'managers');
+          const staffNames = await fetchNames(emailsToFetch, 'inventory_staff');
+          const managerNames = await fetchNames(emailsToFetch, 'inventory_managers');
           
           setCreatorNames(prev => ({ ...prev, ...staffNames, ...managerNames }));
         }
@@ -295,47 +295,85 @@ const BatchInventory = () => {
             animate={{ opacity: 1, y: 0 }}
             className="bg-white dark:bg-black rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-sm overflow-hidden"
           >
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
-                <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-black dark:text-gray-400">
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="min-w-full">
+                <thead className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-border">
                   <tr>
-                    <th scope="col" className="px-6 py-3">Batch</th>
-                    <th scope="col" className="px-6 py-3">Items</th>
-                    <th scope="col" className="px-6 py-3">Value</th>
-                    <th scope="col" className="px-6 py-3">Creator</th>
-                    <th scope="col" className="px-6 py-3">Created</th>
-                    <th scope="col" className="px-6 py-3 text-right">Actions</th>
+                    {[
+                      { key: 'batch', label: 'Batch', align: 'left' },
+                      { key: 'items', label: 'Items', align: 'center' },
+                      { key: 'value', label: 'Value', align: 'center' },
+                      { key: 'creator', label: 'Creator', align: 'center' },
+                      { key: 'created', label: 'Created', align: 'center' },
+                      { key: 'actions', label: 'Actions', align: 'center' }
+                    ].map(({ key, label, align }) => (
+                      <th key={key} scope="col" className={`px-6 py-4 text-${align} text-sm font-bold text-foreground`}>
+                        <div className={`flex items-center gap-2 ${align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start'}`}>
+                          <span>{label}</span>
+                        </div>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {filteredBatches.map((batch) => {
+                <tbody className="bg-card">
+                  {filteredBatches.map((batch, index) => {
                     const totalItems = batch.items?.reduce((sum, item) => sum + item.sizes?.reduce((sizeSum, size) => sizeSum + (size.quantity || 0), 0), 0) || 0;
                     const totalValue = batch.items?.reduce((sum, item) => sum + item.sizes?.reduce((sizeSum, size) => sizeSum + ((size.quantity || 0) * (item.price || 0)), 0), 0) || 0;
                     const isDepleted = totalItems === 0;
                     return (
-                      <tr key={batch.id} className={`${isDepleted ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-black'} border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600`}>
+                      <tr key={batch.id} className={`${index % 2 === 0 ? 'bg-card' : 'bg-muted/20'} hover:bg-primary/5 transition-all duration-200 cursor-pointer border-b border-border/50 last:border-b-0 ${isDepleted ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
                         <td className="px-6 py-4">
-                          <div className="font-semibold text-gray-900 dark:text-white flex items-center">
-                            {batch.name}
-                            {isDepleted && (
-                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                Depleted
-                              </span>
-                            )}
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <div className="font-semibold text-foreground flex items-center gap-2">
+                                {batch.name}
+                                {isDepleted && (
+                                  <span className="px-2 py-1 inline-flex items-center text-xs font-bold rounded-full bg-gradient-to-r from-red-500/10 to-red-600/10 text-red-600 border border-red-200 dark:border-red-800">
+                                    Depleted
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm text-muted-foreground">{batch.type}</div>
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500">{batch.type}</div>
                         </td>
-                        <td className="px-6 py-4">{totalItems} pcs</td>
-                        <td className="px-6 py-4">${totalValue.toFixed(2)}</td>
-                        <td className="px-6 py-4">{creatorNames[batch.createdBy] || formatCreatorName(batch.createdBy)}</td>
-                        <td className="px-6 py-4">{new Date(batch.createdAt?.seconds * 1000).toLocaleDateString()}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end space-x-2">
-                            <Button size="sm" variant="outline" onClick={() => navigate(`/batches/${batch.id}`)}>View</Button>
+                        <td className="px-6 py-4 text-center">
+                          <span className="px-3 py-1 inline-flex text-xs font-bold rounded-full bg-gradient-to-r from-blue-500/10 to-blue-600/10 text-blue-600 border border-blue-200 dark:border-blue-800">
+                            {totalItems} pcs
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className="px-3 py-1 inline-flex text-xs font-bold rounded-full bg-gradient-to-r from-green-500/10 to-green-600/10 text-green-600 border border-green-200 dark:border-green-800">
+                            ${totalValue.toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="bg-muted/30 rounded-lg p-2 border border-border">
+                            <div className="text-sm font-medium text-foreground">{creatorNames[batch.createdBy] || formatCreatorName(batch.createdBy)}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className="px-2 py-1 text-xs font-medium text-muted-foreground bg-muted/50 rounded-full">
+                            {new Date(batch.createdAt?.seconds * 1000).toLocaleDateString()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button 
+                              onClick={() => navigate(`/batches/${batch.id}`)} 
+                              className="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-all duration-200 border border-blue-200"
+                              title="View Batch"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
                             {isManager() && (
-                              <>
-                                <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-100 dark:text-red-500 dark:hover:bg-red-900/20" onClick={() => handleDeleteClick(batch)}>Delete</Button>
-                              </>
+                              <button 
+                                onClick={() => handleDeleteClick(batch)} 
+                                className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 transition-all duration-200 border border-red-200"
+                                title="Delete Batch"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             )}
                           </div>
                         </td>
